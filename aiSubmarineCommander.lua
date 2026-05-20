@@ -7,10 +7,8 @@ local function log(message, logCoalition, duration)
     env.info(message, false)
 end
 
-local debug = trigger.misc.getUserFlag("Debug")
-
 local function debugMessage(message, duration)
-    if debug == 1 then
+    if trigger.misc.getUserFlag("Debug") == 1 then
         duration = duration or 10
         trigger.action.outText(message, duration, false)
         env.info(message, false)
@@ -307,9 +305,9 @@ function AISubmarineCommander:startTorpedoEvasion()
     self.evasionTimer = 0
     self.attackTarget = nil
 
-    -- Deploy noise maker immediately (short delay for torpedo distraction)
+    -- Deploy noise maker immediately (no delay for torpedo distraction)
     if self.sub.noiseMakerCount > 0 then
-        self:deployNoiseMaker(60)
+        self:deployNoiseMaker(0)
     end
 
     -- Random depth change: either go deep or go shallow
@@ -390,6 +388,18 @@ end
 
 -- Check if any active ASW torpedo is within 10km
 function AISubmarineCommander:detectASWTorpedo()
+    for _, torpedo in ipairs(self.torpedoes) do
+        if torpedo:isActive() then
+            local dx = torpedo.x - self.sub.x
+            local dz = torpedo.z - self.sub.z
+            local dist = math.sqrt(dx * dx + dz * dz)
+            if dist < 10000 then
+                return true
+            end
+        end
+    end
+    return false
+end
 
 -- Check if any active dipping sonar is within 10km
 function AISubmarineCommander:detectActiveDippingSonar()
@@ -455,18 +465,6 @@ function AISubmarineCommander:startDippingSonarEvasion()
     end
 
     log(self.sub.name .. " AI: Active sonar detected! Evading deep.", self.sub.ownerCoalition)
-end
-    for _, torpedo in ipairs(self.torpedoes) do
-        if torpedo:isActive() then
-            local dx = torpedo.x - self.sub.x
-            local dz = torpedo.z - self.sub.z
-            local dist = math.sqrt(dx * dx + dz * dz)
-            if dist < 10000 then
-                return true
-            end
-        end
-    end
-    return false
 end
 
 -- ===== TARGET ACQUISITION =====

@@ -13,10 +13,8 @@ local function log(message, logCoalition, duration)
     env.info(message, false)
 end
 
-local debug = trigger.misc.getUserFlag("Debug")
-
 local function debugMessage(message, duration)
-    if debug == 1 then
+    if trigger.misc.getUserFlag("Debug") == 1 then
         duration = duration or 10
         trigger.action.outText(message, duration, false)
         env.info(message, false) -- Removed the extra 'false' argument
@@ -124,6 +122,7 @@ end
 
 function VirtualSubmarine:newSSNFromZone(name, zoneName, depth, speed, heading, ownerCoalition, thermalLayerDepth, randomize)
     local sub = VirtualSubmarine:newFromZone(name, zoneName, depth, speed, heading, 0.8, 18, 500, ownerCoalition, thermalLayerDepth, randomize)
+    if not sub then return nil end
     sub.maxTorpedoes = 10
     sub.torpedoCount = 10
     sub.maxNoiseMakers = 6
@@ -210,7 +209,7 @@ function VirtualSubmarine:update()
         self.belowThermalLayer = false
     end
 
-    debugMessage("VirtualSubmarine " .. self.name .. " pos: X=" .. string.format("%.1f", self.x) .. " Z=" .. string.format("%.1f", self.z) .. " depth=" .. string.format("%.1f", self.depth) .. "m heading=" .. self.heading .. "° speed=" .. self.speed .. " m/s", dt)
+    debugMessage("VirtualSubmarine " .. self.name .. " pos: X=" .. string.format("%.1f", self.x) .. " Z=" .. string.format("%.1f", self.z) .. " depth=" .. string.format("%.1f", self.depth) .. "m heading=" .. self.heading .. "\194\176 speed=" .. self.speed .. " m/s", 1)
 
     self:markOwnPosition()
 
@@ -301,7 +300,7 @@ function VirtualSubmarine:markOwnPosition()
     local tgtSpdText = string.format("%.0f", self.targetSpeed)
     local text = string.format("%s | Depth: %.1fm (%s) | Hdg: %s\194\176 -> %s\194\176 | Spd: %s -> %s m/s",
         self.name, self.depth, layerStatus, hdgText, tgtHdgText, spdText, tgtSpdText)
-    trigger.action.outTextForCoalition(self.ownerCoalition, text, 5, true)
+    trigger.action.outTextForCoalition(self.ownerCoalition, text, 5, false)
 end
 
 function VirtualSubmarine:setCourse(heading)

@@ -45,7 +45,8 @@ function OrdnanceManager:new(config)
         groupData = {},      -- per-group state
         buoyIdCounter = 0,   -- global counter for unique buoy names
         torpedoIdCounter = 0, -- global counter for unique torpedo names
-        trackedGroups = {}   -- groups we've already set up menus for
+        trackedGroups = {},   -- groups we've already set up menus for
+        dippingSonars = {}    -- live list of all dipping sonars (shared with AI)
     }
     setmetatable(obj, OrdnanceManager)
     obj:startGroupScanner()
@@ -67,11 +68,46 @@ function OrdnanceManager:startGroupScanner()
                 end
             end
         end
+
+        -- Clean up destroyed groups
+        self:cleanupDestroyedGroups()
+
         timer.scheduleFunction(function()
             scan()
         end, nil, timer.getTime() + 10)
     end
     scan()
+end
+
+-- Remove tracking data for groups that no longer exist
+function OrdnanceManager:cleanupDestroyedGroups()
+    local toRemove = {}
+    for groupName, _ in pairs(self.trackedGroups) do
+        local dcsGroup = Group.getByName(groupName)
+        if not dcsGroup or not dcsGroup:isExist() then
+            toRemove[#toRemove + 1] = groupName
+        end
+    end
+
+    for _, groupName in ipairs(toRemove) do
+        local data = self.groupData[groupName]
+        if data and data.dippingSonar then
+            if data.dippingSonar:isDeployed() then
+                data.dippingSonar:breakCable("Aircraft destroyed!")
+            end
+            data.dippingSonar:stopUpdateLoop()
+            -- Remove from live dipping sonars list
+            for i, sonar in ipairs(self.dippingSonars) do
+                if sonar == data.dippingSonar then
+                    table.remove(self.dippingSonars, i)
+                    break
+                end
+            end
+        end
+        self.groupData[groupName] = nil
+        self.trackedGroups[groupName] = nil
+        debugMessage("ASW Hunter group destroyed, cleaned up: " .. groupName)
+    end
 end
 
 function OrdnanceManager:isHunterGroup(groupName)
@@ -89,6 +125,9 @@ function OrdnanceManager:initGroup(groupName)
         prepareScheduleId = nil,
         dippingSonar = DippingSonar:new(groupName, self.ownerCoalition, self.thermalLayerDepth, self.submarines)
     }
+
+    -- Add to live dipping sonars list
+    self.dippingSonars[#self.dippingSonars + 1] = self.groupData[groupName].dippingSonar
 
     local mooseGroup = GROUP:FindByName(groupName)
     if not mooseGroup then return end
@@ -598,13 +637,7 @@ end
 
 -- ===== UTILITY =====
 function OrdnanceManager:getDippingSonars()
-    local sonars = {}
-    for _, data in pairs(self.groupData) do
-        if data.dippingSonar then
-            sonars[#sonars + 1] = data.dippingSonar
-        end
-    end
-    return sonars
+    return self.dippingSonars
 end
 
 function OrdnanceManager:messageToGroup(groupName, message, duration)

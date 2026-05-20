@@ -75,8 +75,9 @@ function HumanSubmarineCommander:buildMenus()
         -- Noise Maker submenu
         local decoyMenu = MENU_COALITION:New(side, "Noise Makers", subMenu)
         local delayMenu = MENU_COALITION:New(side, "Deploy Noise Maker", decoyMenu)
-        for _, delay in ipairs({60, 120, 180, 240}) do
-            MENU_COALITION_COMMAND:New(side, delay .. "s delay", delayMenu, self.deployNoiseMaker, self, sub, delay)
+        for _, delay in ipairs({0, 60, 120, 180, 240}) do
+            local label = delay == 0 and "Immediate" or (delay .. "s delay")
+            MENU_COALITION_COMMAND:New(side, label, delayMenu, self.deployNoiseMaker, self, sub, delay)
         end
         MENU_COALITION_COMMAND:New(side, "Noise Maker Status", decoyMenu, self.noiseMakerStatus, self, sub)
     end
@@ -101,7 +102,7 @@ end
 
 function HumanSubmarineCommander:changeDepth(sub, delta)
     if not sub:isAlive() then return end
-    local newDepth = math.max(0, sub.depth + delta)
+    local newDepth = math.max(0, sub.targetDepth + delta)
     sub:setTargetDepth(newDepth)
 end
 

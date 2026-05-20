@@ -13,10 +13,8 @@ local function logAll(message, duration)
     env.info(message, false)
 end
 
-local debug = trigger.misc.getUserFlag("Debug")
-
 local function debugMessage(message, duration)
-    if debug == 1 then
+    if trigger.misc.getUserFlag("Debug") == 1 then
         duration = duration or 10
         trigger.action.outText(message, duration, false)
         env.info(message, false)

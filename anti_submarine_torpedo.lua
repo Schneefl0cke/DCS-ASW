@@ -13,10 +13,8 @@ local function logAll(message, duration)
     env.info(message, false)
 end
 
-local debug = trigger.misc.getUserFlag("Debug")
-
 local function debugMessage(message, duration)
-    if debug == 1 then
+    if trigger.misc.getUserFlag("Debug") == 1 then
         duration = duration or 10
         trigger.action.outText(message, duration, false)
         env.info(message, false)
@@ -157,9 +155,10 @@ function AntiSubmarineTorpedo:updateDepth(dt)
     end
 end
 
--- Detect submarines and home in on contacts
+-- Detect submarines and home in on nearest contact
 function AntiSubmarineTorpedo:detectAndHome(dt)
-    local detected = false
+    local bestContact = nil
+    local bestDist = math.huge
 
     for _, sub in ipairs(self.submarines) do
         if sub:isAlive() then
@@ -174,37 +173,43 @@ function AntiSubmarineTorpedo:detectAndHome(dt)
                 return
             end
 
-            -- Try sonar detection (same formula as buoy)
+            -- Try sonar detection
             local contact = self:tryDetect(sub)
             if contact then
-                if not self.hasTarget then
-                    log(self.name .. " SONAR CONTACT! Homing on target!", self.ownerCoalition)
+                local cdx = contact.x - self.x
+                local cdz = contact.z - self.z
+                local contactDist = math.sqrt(cdx * cdx + cdz * cdz)
+                if contactDist < bestDist then
+                    bestDist = contactDist
+                    bestContact = contact
                 end
-                self.hasTarget = true
-                detected = true
-                -- Homing ping sound every 3 seconds (both coalitions)
-                local now = timer.getTime()
-                if now - self.lastHomingPingTime >= 3 then
-                    self.lastHomingPingTime = now
-                    if ASW_SOUND then
-                        local enemyCoalition = self.ownerCoalition == coalition.side.BLUE and coalition.side.RED or coalition.side.BLUE
-                        ASW_SOUND:playForCoalition(self.ownerCoalition, "torpedo_homing")
-                        ASW_SOUND:playForCoalition(enemyCoalition, "torpedo_homing")
-                    end
-                end
-                -- Store last known position
-                self.lastContactX = contact.x
-                self.lastContactZ = contact.z
-                self.lastContactDepth = contact.depth
-                -- Home toward estimated position
-                self:homeOnContact(contact, dt)
-                return -- Only home on first detected contact
             end
         end
     end
 
-    -- No detection this tick: if we had a target, turn back toward last known position
-    if not detected and self.hasTarget and self.lastContactX then
+    if bestContact then
+        if not self.hasTarget then
+            log(self.name .. " SONAR CONTACT! Homing on target!", self.ownerCoalition)
+        end
+        self.hasTarget = true
+        -- Homing ping sound every 3 seconds (both coalitions)
+        local now = timer.getTime()
+        if now - self.lastHomingPingTime >= 3 then
+            self.lastHomingPingTime = now
+            if ASW_SOUND then
+                local enemyCoalition = self.ownerCoalition == coalition.side.BLUE and coalition.side.RED or coalition.side.BLUE
+                ASW_SOUND:playForCoalition(self.ownerCoalition, "torpedo_homing")
+                ASW_SOUND:playForCoalition(enemyCoalition, "torpedo_homing")
+            end
+        end
+        -- Store last known position
+        self.lastContactX = bestContact.x
+        self.lastContactZ = bestContact.z
+        self.lastContactDepth = bestContact.depth
+        -- Home toward nearest detected contact
+        self:homeOnContact(bestContact, dt)
+    elseif self.hasTarget and self.lastContactX then
+        -- No detection: turn toward last known position
         self:homeOnContact({
             x = self.lastContactX,
             z = self.lastContactZ,
@@ -213,7 +218,8 @@ function AntiSubmarineTorpedo:detectAndHome(dt)
     end
 end
 
--- Sonar detection: same probability model as Sonarbuoy
+-- Active sonar detection: ping bounces off hull regardless of sub movement.
+-- Movement adds a bonus (cavitation, Doppler) but a stationary sub is still detectable.
 function AntiSubmarineTorpedo:tryDetect(sub)
     local dx = sub.x - self.x
     local dz = sub.z - self.z
@@ -221,8 +227,10 @@ function AntiSubmarineTorpedo:tryDetect(sub)
 
     if distance > self.maxDetectionRange then return nil end
 
-    local effectiveNoise = sub.speed * sub.noiseFactor
-    if effectiveNoise < 0.1 then return nil end
+    -- Active sonar: base reflection from hull + bonus from movement noise
+    local baseReflection = 1.0  -- hull always reflects the ping
+    local movementBonus = sub.speed * sub.noiseFactor * 0.5  -- moving subs are easier
+    local effectiveSignal = baseReflection + movementBonus
 
     local maxEffectiveDepth = 500
     local depthPenalty = math.max(0.1, 1 - (sub.depth / maxEffectiveDepth))
@@ -236,8 +244,8 @@ function AntiSubmarineTorpedo:tryDetect(sub)
 
     local distanceFactor = 1 - (distance / self.maxDetectionRange)
 
-    local scaleFactor = 0.15
-    local probability = effectiveNoise * depthPenalty * thermalPenalty * distanceFactor * scaleFactor
+    local scaleFactor = 0.20
+    local probability = effectiveSignal * depthPenalty * thermalPenalty * distanceFactor * scaleFactor
     probability = math.min(0.95, math.max(0, probability))
 
     debugMessage(self.name .. " sonar -> " .. sub.name .. " dist=" .. string.format("%.0f", distance) .. "m prob=" .. string.format("%.2f", probability))

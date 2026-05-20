@@ -13,10 +13,8 @@ local function logAll(message, duration)
     env.info(message, false)
 end
 
-local debug = trigger.misc.getUserFlag("Debug")
-
 local function debugMessage(message, duration)
-    if debug == 1 then
+    if trigger.misc.getUserFlag("Debug") == 1 then
         duration = duration or 10
         trigger.action.outText(message, duration, false)
         env.info(message, false)
@@ -172,8 +170,9 @@ function DippingSonar:startUpdateLoop()
         end
 
         -- Update cable length
+        local cableStep = self.cableRate * self.detectInterval
         if self.state == "lowering" then
-            self.currentCableLength = self.currentCableLength + self.cableRate
+            self.currentCableLength = self.currentCableLength + cableStep
             if self.currentCableLength >= self.targetCableLength then
                 self.currentCableLength = self.targetCableLength
                 self.state = "active"
@@ -193,7 +192,7 @@ function DippingSonar:startUpdateLoop()
                 end
             end
         elseif self.state == "raising" then
-            self.currentCableLength = self.currentCableLength - self.cableRate
+            self.currentCableLength = self.currentCableLength - cableStep
             if self.currentCableLength <= 0 then
                 self.currentCableLength = 0
                 self.state = "stowed"
@@ -210,7 +209,7 @@ function DippingSonar:startUpdateLoop()
             -- Adjust cable if target changed while active
             local cableDiff = self.targetCableLength - self.currentCableLength
             if math.abs(cableDiff) > 0.1 then
-                local change = self.cableRate
+                local change = cableStep
                 if math.abs(cableDiff) <= change then
                     self.currentCableLength = self.targetCableLength
                 elseif cableDiff > 0 then
@@ -266,7 +265,8 @@ function DippingSonar:ping(unit)
     end
 end
 
--- Detection using same model as buoy but with higher scale factor
+-- Active sonar detection: ping bounces off hull regardless of sub movement.
+-- Movement adds a bonus (cavitation, Doppler) but a stationary sub is still detectable.
 function DippingSonar:tryDetect(sub, sonarX, sonarZ)
     local dx = sub.x - sonarX
     local dz = sub.z - sonarZ
@@ -274,8 +274,10 @@ function DippingSonar:tryDetect(sub, sonarX, sonarZ)
 
     if distance > self.maxDetectionRange then return nil end
 
-    local effectiveNoise = sub.speed * sub.noiseFactor
-    if effectiveNoise < 0.1 then return nil end
+    -- Active sonar: base reflection from hull + bonus from movement noise
+    local baseReflection = 1.0  -- hull always reflects the ping
+    local movementBonus = sub.speed * sub.noiseFactor * 0.5  -- moving subs are easier
+    local effectiveSignal = baseReflection + movementBonus
 
     local maxEffectiveDepth = 500
     local depthPenalty = math.max(0.1, 1 - (sub.depth / maxEffectiveDepth))
@@ -292,7 +294,7 @@ function DippingSonar:tryDetect(sub, sonarX, sonarZ)
 
     local distanceFactor = 1 - (distance / self.maxDetectionRange)
 
-    local probability = effectiveNoise * depthPenalty * thermalPenalty * distanceFactor * self.scaleFactor
+    local probability = effectiveSignal * depthPenalty * thermalPenalty * distanceFactor * self.scaleFactor
     probability = math.min(0.95, math.max(0, probability))
 
     debugMessage(self.groupName .. " dip sonar -> " .. sub.name .. " dist=" .. string.format("%.0f", distance) .. "m prob=" .. string.format("%.2f", probability))
