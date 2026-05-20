@@ -29,14 +29,13 @@ Load scripts in this order in the DCS Mission Editor (DO ONCE triggers):
 
 | Zone Name | Purpose |
 |---|---|
-| `Submarine_initial_position` | Spawn location for the submarine |
-| `ASW_Hunter_Rearming` | Circle zone where ASW aircraft land/hover to rearm (static fallback, not needed if using `rearmUnit`) |
-| `buoy_debug` | Debug sonarbuoy position (can be removed for production) |
+| `Submarine_initial_position` | Spawn location for the submarine (configurable in `asw.lua`) |
+| `ASW_Hunter_Rearming` | Circle zone where ASW aircraft land/hover to rearm (not needed if using `rearmUnit`) |
 | `patrol_1`, `patrol_2`, ... | Patrol waypoints for AI submarine commander (only needed if using AI) |
 
 ### Required Groups
 
-- ASW hunter aircraft groups must have **`_asw_hunter`** in their group name (configurable via `hunterPrefix`). Each group should be a single aircraft (helicopter recommended).
+- ASW hunter aircraft groups must have **`_asw_hunter`** in their group name (configurable). Each group should be a single aircraft (helicopter recommended).
 
 ### Coalition Setup
 
@@ -51,15 +50,15 @@ Both are configurable in `asw.lua`.
 
 | Type | Noise Factor | Max Speed | Max Depth | Torpedoes | Noise Makers | Sonar Range | Thermal Penalty |
 |---|---|---|---|---|---|---|---|
-| Default | 1.0 | 15 m/s | 300m | 6 | 4 | 15 km | 0.3x |
+| Default (custom) | 1.0 | 15 m/s | 300m | 6 | 4 | 15 km | 0.3x |
 | Diesel | 0.5 | 10 m/s (~20 kts) | 250m | 6 | 4 | 15 km | 0.3x |
 | SSN | 0.8 | 18 m/s (~35 kts) | 500m | 10 | 6 | 20 km | 0.5x |
 
-Create submarines using:
-```lua
-VirtualSubmarine:newDieselFromZone("Name", "ZoneName", depth, speed, heading, coalition, thermalLayerDepth, randomize)
-VirtualSubmarine:newSSNFromZone("Name", "ZoneName", depth, speed, heading, coalition, thermalLayerDepth, randomize)
-```
+### Submarine Physics
+
+- **Turn rate**: 2°/s — heading changes are gradual, not instant
+- **Acceleration**: 1 m/s² — speed ramps up/down over time
+- **Depth rate**: Linked to speed — `max(0.5, speed × 0.4)` m/s. Faster subs change depth quicker; minimum 0.5 m/s at rest
 
 ---
 
@@ -69,9 +68,29 @@ A configurable depth (default 90m) that divides the water column:
 
 - **Above**: Sonarbuoys detect submarines normally
 - **Below**: Detection probability is severely reduced (0.2x multiplier for buoys)
+- **Cross-layer penalty**: ASW torpedoes and dipping sonar are penalized when on the opposite side of the layer from the target (0.2x)
 - Submarine passive sonar is also affected: diesel gets 0.3x range, SSN gets 0.5x range when below the layer
 
-The thermal layer is the core tactical element. Submarines want to stay below it; hunters need to account for it when choosing buoy deployment strategy.
+The thermal layer is the core tactical element. Submarines want to stay below it; hunters need to set correct torpedo search depths and dipping sonar cable depths to match.
+
+---
+
+## F10 Map Display
+
+### Torpedo Trails
+Both submarine torpedoes and ASW torpedoes draw a **red line trail** on the F10 map, visible to all coalitions. A red text label shows the torpedo's status (name, heading, battery, depth, SEARCHING/HOMING). The trail is cleared on impact and replaced with an impact marker.
+
+### Torpedo Launch Positions
+A **green circle with text** marks every torpedo launch position, visible to all. Labels distinguish "Submarine Torpedo Launch" from "ASW Torpedo Launch".
+
+### Submarine Position
+The submarine's own coalition sees a **blue trail** (last 3 segments) with a **heading arrow**. Status text (depth, heading, speed, targets) is displayed as coalition text messages rather than map markers.
+
+### Sonarbuoy Position
+Sonarbuoys are shown as a **small blue circle** with the buoy name, visible to all coalitions.
+
+### Submarine Sunk
+When destroyed, a **red circle with text** is placed at the sunk position, visible to all coalitions.
 
 ---
 
@@ -94,7 +113,7 @@ Available under the group radio menu for any aircraft group with `_asw_hunter` i
 - Buoys detect submarines every 5 seconds using a probability-based model
 - Detection probability depends on: submarine noise (speed × noise factor), distance, depth, and thermal layer
 - Contact markers appear on the F10 map for 30 seconds with estimated position, depth, and confidence percentage
-- Buoy position markers are **visible to both coalitions** — the submarine side can see where buoys are deployed
+- Buoy position is marked with a blue circle **visible to both coalitions** — the submarine side can see where buoys are deployed
 - The submarine coalition receives a **warning message** when a buoy is deployed
 
 #### Torpedo (ASW)
@@ -108,13 +127,14 @@ Available under the group radio menu for any aircraft group with `_asw_hunter` i
 - Each hunter carries **1 torpedo** (configurable)
 - Speed: 30 knots (15.43 m/s)
 - Turn rate: 3°/s
-- Sonar range: 1.5 km (same detection formula as buoys, checked every second)
+- Sonar range: 1.5 km (checked every second)
 - Kill radius: 150m horizontal + 50m depth tolerance
-- Battery: 180 seconds (3 minutes)
+- Battery: 300 seconds (5 minutes)
+- **Thermal layer aware**: detection penalty only applies when torpedo and target are on opposite sides of the layer. Setting the correct search depth matters!
 - If the torpedo acquires a target then loses it, it turns back toward the last known position
 - If the torpedo hits a **noise maker** instead of a real sub, it destroys the decoy and announces it
 - The submarine coalition receives a **warning** when an ASW torpedo is launched
-- Torpedo marker is **visible to all coalitions** on the F10 map
+- Torpedo trail is **visible to all coalitions** on the F10 map as a red line
 
 #### Dipping Sonar
 
@@ -158,12 +178,15 @@ Available as coalition menu for the submarine's coalition.
 
 | Command | Description |
 |---|---|
-| **Change Heading** | Adjust heading: ±5°, ±10°, ±20° |
-| **Change Speed** | Adjust speed: ±1, ±2, ±5 m/s |
-| **Change Depth** | Adjust depth: ±5m, ±10m, ±20m |
+| **Change Heading** | Adjust heading: ±5°, ±10°, ±25°, ±50°, ±90° (applied to target heading) |
+| **Set Heading** | Set absolute heading: N, NE, E, SE, S, SW, W, NW |
+| **Change Speed** | Adjust speed: ±1, ±2, ±5, ±10 m/s (applied to target speed) |
+| **Change Depth** | Adjust depth: ±10m, ±25m, ±50m, ±100m |
 | **Dive (max depth)** | Go to maximum operating depth |
 | **Periscope Depth** | Rise to 20m (required for torpedo launch) |
 | **Level (hold depth)** | Hold current depth |
+
+The status display shows both current and target values: `Hdg: 270° -> 315° | Spd: 3.5 -> 8 m/s`
 
 #### Torpedoes (Anti-Ship)
 
@@ -182,7 +205,7 @@ Submarine torpedo specifications:
 - Explosion power: 5000 (destroys DCS ship units)
 - Targets any enemy coalition ship
 - If contact is lost, turns back toward last known position
-- Torpedo marker is **visible to all coalitions**
+- Torpedo trail is **visible to all coalitions** as a red line
 - If launched within range of a sonarbuoy, the buoy instantly marks the **exact launch position** with 100% confidence
 
 #### Noise Makers (Decoys)
@@ -222,23 +245,26 @@ An automated commander that replaces or supplements the human submarine controll
 
 ### Setup
 
-Create patrol waypoint trigger zones in the Mission Editor (`patrol_1`, `patrol_2`, etc.), then uncomment the AI commander block in `asw.lua`:
+Set `COMMANDER_MODE` in `asw.lua`:
 
 ```lua
-local aiCommander = AISubmarineCommander:new(ghostSub, {
-    waypointZones = {"patrol_1", "patrol_2", "patrol_3", "patrol_4"},
-    patrolSpeed = 5,
-    patrolDepth = 80,
-    attackRange = 12000,
+COMMANDER_MODE = "human"    -- F10 menu only
+COMMANDER_MODE = "ai"       -- AI control only
+COMMANDER_MODE = "both"     -- Human menu + AI (AI takes priority)
+```
+
+Configure AI behavior in the `AI_CONFIG` table:
+
+```lua
+local AI_CONFIG = {
+    waypointZones   = {"patrol_1", "patrol_2", "patrol_3", "patrol_4"},
+    patrolSpeed     = 5,
+    patrolDepth     = 80,
+    attackRange     = 12000,
     evasionBuoyRange = 7000,
     evasionDuration = 180,
-    profile = "cautious",  -- or "aggressive"
-    targetCoalition = ASW_COALITION,
-    buoys = ordnanceManager.buoys,
-    torpedoes = ordnanceManager.torpedoes,
-    detectableObjects = submarines,
-    dippingSonars = ordnanceManager:getDippingSonars(),
-})
+    profile         = "cautious",   -- or "aggressive"
+}
 ```
 
 ### Profiles
@@ -268,7 +294,7 @@ local aiCommander = AISubmarineCommander:new(ghostSub, {
 
 All sonar detection (buoys, ASW torpedoes, submarine passive sonar) uses a probability-based model:
 
-### Buoy / ASW Torpedo Detection Formula
+### Buoy Detection Formula
 
 ```
 effectiveNoise = submarine.speed × submarine.noiseFactor
@@ -278,9 +304,17 @@ distanceFactor = 1 - distance/maxRange
 probability = effectiveNoise × depthPenalty × thermalPenalty × distanceFactor × 0.15
 ```
 
-- Clamped to [0, 0.95]
-- A stationary or very slow sub (effectiveNoise < 0.1) is undetectable
-- On successful detection, position is estimated with bearing error (±30°) and range error (±25%), both scaled by confidence
+### ASW Torpedo Detection Formula
+
+```
+effectiveNoise = submarine.speed × submarine.noiseFactor
+depthPenalty = max(0.1, 1 - depth/500)
+thermalPenalty = 1.0 (same side of layer) or 0.2 (opposite sides)
+distanceFactor = 1 - distance/1500
+probability = effectiveNoise × depthPenalty × thermalPenalty × distanceFactor × 0.15
+```
+
+- Thermal penalty applies when torpedo and target are on **opposite sides** of the thermal layer
 
 ### Dipping Sonar Detection Formula
 
@@ -295,6 +329,12 @@ probability = effectiveNoise × depthPenalty × thermalPenalty × distanceFactor
 - Same model as buoys but with **0.25** scale factor (vs 0.15), **8 km** range, and **3 second** ping interval
 - Thermal penalty is based on cable depth vs sub depth relative to thermal layer — lowering the cable below the layer removes the penalty
 - Position estimated with bearing error (±30°) and range error (±25%), depth error (±30%), all scaled by confidence
+
+### Common Detection Properties
+
+- Clamped to [0, 0.95]
+- A stationary or very slow sub (effectiveNoise < 0.1) is undetectable
+- On successful detection, position is estimated with bearing error (±30°) and range error (±25%), both scaled by confidence
 
 ### Submarine Torpedo Ship Detection
 
@@ -319,27 +359,56 @@ probability = 0.9 × distanceFactor
 
 ## Configuration Reference
 
-All values are configurable in `asw.lua`:
+All values are configurable in the `asw.lua` configuration tables:
 
 ```lua
--- Coalitions
+-- 1. Coalitions
 SUB_COALITION = coalition.side.RED
 ASW_COALITION = coalition.side.BLUE
 
--- Environment
-THERMAL_LAYER_DEPTH = 90        -- meters
+-- 2. Environment
+THERMAL_LAYER_DEPTH = 90
 
--- Hunter aircraft
-HUNTER_PREFIX = "_asw_hunter"   -- group name must contain this
-HUNTER_REARM_ZONE = "ASW_Hunter_Rearming"
-HUNTER_REARM_UNIT = nil          -- set to carrier unit name (e.g. "CVN-74") for moving rearm point
-HUNTER_REARM_RADIUS = 500        -- meters around rearmUnit
-HUNTER_MAX_BUOYS = 4
-HUNTER_MAX_TORPEDOES = 1
-HUNTER_MAX_ALTITUDE = 50        -- meters AGL for deploy/launch
-HUNTER_MAX_SPEED = 60           -- m/s for deploy/launch
-HUNTER_RECOVERY_RANGE = 200     -- meters to recover buoy
-BUOY_DETECT_INTERVAL = 5        -- seconds between buoy scans
+-- 3. Submarine
+SUB_CONFIG = {
+    type            = "diesel",                     -- "diesel", "ssn", or "custom"
+    name            = "Kursk",
+    spawnZone       = "Submarine_initial_position",
+    startDepth      = 60,
+    startSpeed      = 8,
+    startHeading    = 270,
+    randomizeSpawn  = false,
+    -- Custom type only:
+    noiseFactor     = 1.0,
+    maxSpeed        = 15,
+    maxDepth        = 300,
+}
+
+-- 4. Commander
+COMMANDER_MODE = "human"        -- "human", "ai", or "both"
+AI_CONFIG = {
+    waypointZones   = {"patrol_1", "patrol_2", "patrol_3", "patrol_4"},
+    patrolSpeed     = 5,
+    patrolDepth     = 80,
+    attackRange     = 12000,
+    evasionBuoyRange = 7000,
+    evasionDuration = 180,
+    profile         = "cautious",
+}
+
+-- 5. ASW Hunters
+HUNTER_CONFIG = {
+    prefix          = "_asw_hunter",
+    rearmZone       = "ASW_Hunter_Rearming",
+    rearmUnit       = nil,          -- carrier unit name (e.g. "CVN-74")
+    rearmRadius     = 500,
+    maxBuoys        = 4,
+    maxTorpedoes    = 1,
+    maxAltitude     = 50,
+    maxSpeed        = 60,
+    recoveryRange   = 200,
+    detectInterval  = 5,
+}
 ```
 
 ---
@@ -348,7 +417,7 @@ BUOY_DETECT_INTERVAL = 5        -- seconds between buoy scans
 
 | File | Class | Purpose |
 |---|---|---|
-| `submarine.lua` | `VirtualSubmarine` | Virtual submarine entity with movement, depth, thermal layer, passive sonar |
+| `submarine.lua` | `VirtualSubmarine` | Virtual submarine entity with movement, turning, depth, thermal layer, passive sonar |
 | `sonarbuoy.lua` | `Sonarbuoy` | Deployable acoustic sensor with probabilistic detection |
 | `noiseMaker.lua` | `NoiseMaker` | Submarine decoy that mimics sub noise signature |
 | `anti_submarine_torpedo.lua` | `AntiSubmarineTorpedo` | Player-launched ASW torpedo with active homing sonar |
