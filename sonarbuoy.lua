@@ -1,6 +1,12 @@
 Sonarbuoy = {}
 Sonarbuoy.__index = Sonarbuoy
 
+if not _buoyMarkIdCounter then _buoyMarkIdCounter = 300000 end
+local function nextBuoyMarkId()
+    _buoyMarkIdCounter = _buoyMarkIdCounter + 1
+    return _buoyMarkIdCounter
+end
+
 local function log(message, logCoalition, duration)
     duration = duration or 10
     trigger.action.outTextForCoalition(logCoalition, message, duration, false)
@@ -32,7 +38,8 @@ function Sonarbuoy:new(name, x, z, ownerCoalition, maxDetectionRange, thermalLay
         maxDetectionRange = maxDetectionRange or 15000,
         thermalLayerDepth = thermalLayerDepth or 90,
         active = true,
-        marker = nil,
+        circleMarkId = nil,
+        textMarkId = nil,
         contactMarkers = {},
         lastSmokeTime = 0
     }
@@ -83,18 +90,28 @@ end
 
 -- Mark buoy position on F10 map (visible to all)
 function Sonarbuoy:markOwnPosition()
-    local coord = COORDINATE:New(self.x, 0, self.z)
-    local text = self.name .. " (Sonarbuoy)"
-    self.marker = MARKER:New(coord, text):ReadOnly()
+    local point = {x = self.x, y = 0, z = self.z}
+    local blue = {0, 0, 1, 1}
+
+    self.circleMarkId = nextBuoyMarkId()
+    trigger.action.circleToAll(-1, self.circleMarkId, point, 150, blue, {0, 0, 1, 0.3}, 1, true)
+
+    local textPoint = {x = self.x + 200, y = 0, z = self.z}
+    self.textMarkId = nextBuoyMarkId()
+    trigger.action.textToAll(-1, self.textMarkId, textPoint, blue, {0, 0, 0, 0}, 10, true, self.name)
 end
 
 -- Remove the buoy
 function Sonarbuoy:remove()
     if not self.active then return end
     self.active = false
-    if self.marker then
-        self.marker:Remove()
-        self.marker = nil
+    if self.circleMarkId then
+        trigger.action.removeMark(self.circleMarkId)
+        self.circleMarkId = nil
+    end
+    if self.textMarkId then
+        trigger.action.removeMark(self.textMarkId)
+        self.textMarkId = nil
     end
     self:clearContactMarkers()
     log("Sonarbuoy " .. self.name .. " removed", self.ownerCoalition)

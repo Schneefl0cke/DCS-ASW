@@ -30,15 +30,25 @@ function HumanSubmarineCommander:buildMenus()
 
         -- Heading submenu
         local headingMenu = MENU_COALITION:New(side, "Change Heading", subMenu)
-        local headingDeltas = {-20, -10, -5, 5, 10, 20}
+        local headingDeltas = {-90, -50, -25, -10, -5, 5, 10, 25, 50, 90}
         for _, delta in ipairs(headingDeltas) do
             local label = (delta > 0 and "+" or "") .. delta .. "°"
             MENU_COALITION_COMMAND:New(side, label, headingMenu, self.changeHeading, self, sub, delta)
         end
 
+        -- Set Heading submenu
+        local setHeadingMenu = MENU_COALITION:New(side, "Set Heading", subMenu)
+        local headings = {
+            {0, "N (000°)"}, {45, "NE (045°)"}, {90, "E (090°)"}, {135, "SE (135°)"},
+            {180, "S (180°)"}, {225, "SW (225°)"}, {270, "W (270°)"}, {315, "NW (315°)"}
+        }
+        for _, h in ipairs(headings) do
+            MENU_COALITION_COMMAND:New(side, h[2], setHeadingMenu, self.setHeading, self, sub, h[1])
+        end
+
         -- Speed submenu
         local speedMenu = MENU_COALITION:New(side, "Change Speed", subMenu)
-        local speedDeltas = {-5, -2, -1, 1, 2, 5}
+        local speedDeltas = {-10, -5, -2, -1, 1, 2, 5, 10}
         for _, delta in ipairs(speedDeltas) do
             local label = (delta > 0 and "+" or "") .. delta .. " m/s"
             MENU_COALITION_COMMAND:New(side, label, speedMenu, self.changeSpeed, self, sub, delta)
@@ -74,13 +84,18 @@ end
 
 function HumanSubmarineCommander:changeHeading(sub, delta)
     if not sub:isAlive() then return end
-    local newHeading = (sub.heading + delta) % 360
+    local newHeading = (sub.targetHeading + delta) % 360
     sub:setCourse(newHeading)
+end
+
+function HumanSubmarineCommander:setHeading(sub, heading)
+    if not sub:isAlive() then return end
+    sub:setCourse(heading)
 end
 
 function HumanSubmarineCommander:changeSpeed(sub, delta)
     if not sub:isAlive() then return end
-    local newSpeed = math.max(0, sub.speed + delta)
+    local newSpeed = math.max(0, sub.targetSpeed + delta)
     sub:setSpeed(newSpeed)
 end
 

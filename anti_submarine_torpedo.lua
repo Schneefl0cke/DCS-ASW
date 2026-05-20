@@ -23,6 +23,12 @@ local function debugMessage(message, duration)
     end
 end
 
+if not _torpedoMarkIdCounter then _torpedoMarkIdCounter = 100000 end
+local function nextMarkId()
+    _torpedoMarkIdCounter = _torpedoMarkIdCounter + 1
+    return _torpedoMarkIdCounter
+end
+
 -- Constructor
 -- name: Identifier (e.g. "Hunter1-Torpedo-1")
 -- x, z: DCS world coordinates at launch
@@ -57,11 +63,15 @@ function AntiSubmarineTorpedo:new(name, x, z, heading, searchDepth, ownerCoaliti
         elapsedTime = 0,
         lastUpdateTime = timer.getTime(),
         lastMarkerTime = 0,         -- Track when last marker was created
-        marker = nil,
+        prevMarkerX = x,
+        prevMarkerZ = z,
+        markerIds = {},
+        textMarkerId = nil,
         updateScheduleId = nil
     }
     setmetatable(obj, AntiSubmarineTorpedo)
     obj:startUpdateLoop()
+    obj:markLaunchPosition()
     log("Torpedo " .. name .. " launched! Search depth: " .. obj.targetDepth .. "m | Battery: " .. obj.batteryLife .. "s", obj.ownerCoalition)
 
     -- Alert enemy coalition about torpedo launch
@@ -69,6 +79,17 @@ function AntiSubmarineTorpedo:new(name, x, z, heading, searchDepth, ownerCoaliti
     trigger.action.outTextForCoalition(enemyCoalition, "WARNING: Enemy ASW torpedo in the water!", 10, false)
 
     return obj
+end
+
+-- Mark launch position on F10 map
+function AntiSubmarineTorpedo:markLaunchPosition()
+    local point = {x = self.x, y = 0, z = self.z}
+    local green = {0, 1, 0, 1}
+    local circleId = nextMarkId()
+    trigger.action.circleToAll(-1, circleId, point, 100, green, {0, 1, 0, 0.3}, 1, true)
+    local textPoint = {x = self.x + 150, y = 0, z = self.z}
+    local textId = nextMarkId()
+    trigger.action.textToAll(-1, textId, textPoint, green, {0, 0, 0, 0}, 10, true, "ASW Torpedo Launch")
 end
 
 -- Main update loop: runs every second
@@ -196,7 +217,9 @@ function AntiSubmarineTorpedo:tryDetect(sub)
     local depthPenalty = math.max(0.1, 1 - (sub.depth / maxEffectiveDepth))
 
     local thermalPenalty = 1.0
-    if sub.depth > self.thermalLayerDepth then
+    local torpedoBelowLayer = self.depth > self.thermalLayerDepth
+    local subBelowLayer = sub.depth > self.thermalLayerDepth
+    if torpedoBelowLayer ~= subBelowLayer then
         thermalPenalty = 0.2
     end
 
@@ -275,24 +298,23 @@ function AntiSubmarineTorpedo:hitTarget(sub)
     -- Check if we hit a noise maker (decoy) instead of a real sub
     local isDecoy = (sub.remove ~= nil and sub.driftHeading ~= nil)
 
+    -- Remove all trail lines and text
+    self:clearMarker()
+
     if isDecoy then
-        -- Hit a noise maker
         sub:remove()
         logAll("*** TORPEDO IMPACT! " .. self.name .. " hit a decoy! ***", 15)
-        self:clearMarker()
-        local coord = COORDINATE:New(sub.x, 0, sub.z)
         local text = self.name .. " | IMPACT | DECOY DESTROYED"
-        self.marker = MARKER:New(coord, text):ReadOnly():ToAll()
+        local coord = COORDINATE:New(sub.x, 0, sub.z)
+        self.impactMarker = MARKER:New(coord, text):ReadOnly():ToAll()
     else
-        -- Hit a real submarine
         local point = {x = sub.x, y = 0, z = sub.z}
         trigger.action.explosion(point, 1000)
         sub:destroy()
         logAll("*** TORPEDO IMPACT! " .. self.name .. " has destroyed " .. sub.name .. "! ***", 30)
-        self:clearMarker()
-        local coord = COORDINATE:New(sub.x, 0, sub.z)
         local text = self.name .. " | IMPACT | " .. sub.name .. " DESTROYED"
-        self.marker = MARKER:New(coord, text):ReadOnly():ToAll()
+        local coord = COORDINATE:New(sub.x, 0, sub.z)
+        self.impactMarker = MARKER:New(coord, text):ReadOnly():ToAll()
     end
 end
 
@@ -322,7 +344,7 @@ function AntiSubmarineTorpedo:stopUpdateLoop()
     end
 end
 
--- Update F10 map marker showing torpedo position
+-- Update F10 map marker as line trail showing torpedo position
 function AntiSubmarineTorpedo:updateMarker()
     local currentTime = timer.getTime()
     -- Only create new marker every 20 seconds
@@ -331,23 +353,38 @@ function AntiSubmarineTorpedo:updateMarker()
     end
     self.lastMarkerTime = currentTime
 
-    local coord = COORDINATE:New(self.x, 0, self.z)
+    -- Draw line segment from previous position to current position
+    local startPoint = {x = self.prevMarkerX, y = 0, z = self.prevMarkerZ}
+    local endPoint = {x = self.x, y = 0, z = self.z}
+    local lineId = nextMarkId()
+    trigger.action.lineToAll(-1, lineId, startPoint, endPoint, {1, 0, 0, 1}, 1, true)
+    self.markerIds[#self.markerIds + 1] = lineId
+
+    -- Remove old text marker
+    if self.textMarkerId then
+        trigger.action.removeMark(self.textMarkerId)
+    end
+
+    -- Place text label at current position
     local remaining = math.max(0, self.batteryLife - self.elapsedTime)
     local status = self.hasTarget and "HOMING" or "SEARCHING"
     local text = string.format("%s | %s | Depth: %.0fm | Hdg: %.0f° | Battery: %.0fs",
         self.name, status, self.depth, self.heading, remaining)
+    local textId = nextMarkId()
+    trigger.action.textToAll(-1, textId, endPoint, {1, 0, 0, 1}, {0, 0, 0, 0}, 12, true, text)
+    self.textMarkerId = textId
+    self.markerIds[#self.markerIds + 1] = textId
 
-    -- Create a new marker that persists for 20 seconds
-    local marker = MARKER:New(coord, text):ReadOnly():ToAll()
-    timer.scheduleFunction(function()
-        marker:Remove()
-    end, nil, timer.getTime() + 20)
+    -- Update previous position
+    self.prevMarkerX = self.x
+    self.prevMarkerZ = self.z
 end
 
--- Remove map marker
+-- Remove all map markers (lines and text)
 function AntiSubmarineTorpedo:clearMarker()
-    if self.marker then
-        self.marker:Remove()
-        self.marker = nil
+    for _, id in ipairs(self.markerIds) do
+        trigger.action.removeMark(id)
     end
+    self.markerIds = {}
+    self.textMarkerId = nil
 end

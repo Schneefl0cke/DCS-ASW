@@ -1,6 +1,12 @@
 VirtualSubmarine = {}
 VirtualSubmarine.__index = VirtualSubmarine
 
+if not _subMarkIdCounter then _subMarkIdCounter = 200000 end
+local function nextSubMarkId()
+    _subMarkIdCounter = _subMarkIdCounter + 1
+    return _subMarkIdCounter
+end
+
 local function log(message, logCoalition, duration)
     duration = duration or 10
     trigger.action.outTextForCoalition(logCoalition, message, duration, false)
@@ -34,8 +40,12 @@ function VirtualSubmarine:new(name, x, z, depth, speed, heading, noiseFactor, ma
         depth = depth or 0,
         targetDepth = depth or 0,
         depthRate = 2,
-        speed = speed or 0, 
+        speed = speed or 0,
+        targetSpeed = speed or 0,
+        accelRate = 1,               -- m/s per second acceleration/deceleration
         heading = heading or 0,
+        targetHeading = heading or 0,
+        turnRate = 2,                -- degrees per second
         noiseFactor = noiseFactor or 1.0,
         maxSpeed = maxSpeed or 15,
         maxDepth = maxDepth or 300,
@@ -45,7 +55,9 @@ function VirtualSubmarine:new(name, x, z, depth, speed, heading, noiseFactor, ma
         alive = true,
         lastUpdateTime = timer.getTime(),
         lastMarkerTime = 0,
-        marker = nil,
+        posHistory = {},
+        trailMarkIds = {},
+        arrowMarkIds = {},
         maxTorpedoes = 6,
         torpedoCount = 6,
         maxNoiseMakers = 4,
@@ -130,7 +142,41 @@ function VirtualSubmarine:update()
 
     if dt <= 0 then return end
 
+    -- Gradually turn toward targetHeading
+    local headingDiff = self.targetHeading - self.heading
+    if headingDiff > 180 then headingDiff = headingDiff - 360 end
+    if headingDiff < -180 then headingDiff = headingDiff + 360 end
+    if math.abs(headingDiff) > 0.01 then
+        local maxTurn = self.turnRate * dt
+        if math.abs(headingDiff) <= maxTurn then
+            self.heading = self.targetHeading
+        elseif headingDiff > 0 then
+            self.heading = self.heading + maxTurn
+        else
+            self.heading = self.heading - maxTurn
+        end
+        if self.heading >= 360 then self.heading = self.heading - 360 end
+        if self.heading < 0 then self.heading = self.heading + 360 end
+    end
+
     local headingRad = math.rad(self.heading)
+
+    -- Gradually change speed toward targetSpeed
+    local speedDiff = self.targetSpeed - self.speed
+    if math.abs(speedDiff) > 0.01 then
+        local maxAccel = self.accelRate * dt
+        if math.abs(speedDiff) <= maxAccel then
+            self.speed = self.targetSpeed
+        elseif speedDiff > 0 then
+            self.speed = self.speed + maxAccel
+        else
+            self.speed = self.speed - maxAccel
+        end
+    end
+
+    -- Depth rate scales with speed: faster = quicker depth changes (min 0.5 m/s at rest)
+    self.depthRate = math.max(0.5, self.speed * 0.4)
+
     local distance = self.speed * dt
 
     -- DCS coordinate mapping: Cosine for North (X), Sine for East (Z)
@@ -182,29 +228,93 @@ function VirtualSubmarine:markOwnPosition()
     if currentTime - self.lastMarkerTime < 5 then return end
     self.lastMarkerTime = currentTime
 
-    local coord = COORDINATE:New(self.x, 0, self.z)
-    local layerStatus = self.belowThermalLayer and "BELOW layer" or "ABOVE layer"
-    local text = self.name .. " | Depth: " .. string.format("%.1f", self.depth) .. "m (" .. layerStatus .. ") | Hdg: " .. self.heading .. "° | Spd: " .. self.speed .. " m/s"
-
-    if self.marker then
-        self.marker:UpdateCoordinate(coord)
-        self.marker:UpdateText(text)
-    else
-        self.marker = MARKER:New(coord, text):ReadOnly():ToCoalition(self.ownerCoalition)
+    -- Record position in history (keep last 4 points for 3 segments)
+    self.posHistory[#self.posHistory + 1] = {x = self.x, z = self.z}
+    if #self.posHistory > 4 then
+        table.remove(self.posHistory, 1)
     end
+
+    -- Clear old trail lines
+    for _, id in ipairs(self.trailMarkIds) do
+        trigger.action.removeMark(id)
+    end
+    self.trailMarkIds = {}
+
+    -- Clear old arrow lines
+    for _, id in ipairs(self.arrowMarkIds) do
+        trigger.action.removeMark(id)
+    end
+    self.arrowMarkIds = {}
+
+    -- Draw trail segments (blue, coalition only)
+    local coalitionId = self.ownerCoalition
+    local blue = {0, 0, 1, 1}
+    for i = 1, #self.posHistory - 1 do
+        local p1 = self.posHistory[i]
+        local p2 = self.posHistory[i + 1]
+        local lineId = nextSubMarkId()
+        trigger.action.lineToAll(coalitionId, lineId,
+            {x = p1.x, y = 0, z = p1.z},
+            {x = p2.x, y = 0, z = p2.z},
+            blue, 1, true)
+        self.trailMarkIds[#self.trailMarkIds + 1] = lineId
+    end
+
+    -- Draw heading arrow from current position
+    local headingRad = math.rad(self.heading)
+    local arrowLen = 300
+    local tipX = self.x + arrowLen * math.cos(headingRad)
+    local tipZ = self.z + arrowLen * math.sin(headingRad)
+
+    -- Arrow shaft
+    local shaftId = nextSubMarkId()
+    trigger.action.lineToAll(coalitionId, shaftId,
+        {x = self.x, y = 0, z = self.z},
+        {x = tipX, y = 0, z = tipZ},
+        blue, 1, true)
+    self.arrowMarkIds[#self.arrowMarkIds + 1] = shaftId
+
+    -- Arrowhead (two lines at ±150° from heading)
+    local arrowHeadLen = 100
+    local angle1 = headingRad + math.rad(150)
+    local angle2 = headingRad - math.rad(150)
+
+    local ah1Id = nextSubMarkId()
+    trigger.action.lineToAll(coalitionId, ah1Id,
+        {x = tipX, y = 0, z = tipZ},
+        {x = tipX + arrowHeadLen * math.cos(angle1), y = 0, z = tipZ + arrowHeadLen * math.sin(angle1)},
+        blue, 1, true)
+    self.arrowMarkIds[#self.arrowMarkIds + 1] = ah1Id
+
+    local ah2Id = nextSubMarkId()
+    trigger.action.lineToAll(coalitionId, ah2Id,
+        {x = tipX, y = 0, z = tipZ},
+        {x = tipX + arrowHeadLen * math.cos(angle2), y = 0, z = tipZ + arrowHeadLen * math.sin(angle2)},
+        blue, 1, true)
+    self.arrowMarkIds[#self.arrowMarkIds + 1] = ah2Id
+
+    -- Log status text to coalition
+    local layerStatus = self.belowThermalLayer and "BELOW layer" or "ABOVE layer"
+    local hdgText = string.format("%.0f", self.heading)
+    local tgtHdgText = string.format("%.0f", self.targetHeading)
+    local spdText = string.format("%.1f", self.speed)
+    local tgtSpdText = string.format("%.0f", self.targetSpeed)
+    local text = string.format("%s | Depth: %.1fm (%s) | Hdg: %s\194\176 -> %s\194\176 | Spd: %s -> %s m/s",
+        self.name, self.depth, layerStatus, hdgText, tgtHdgText, spdText, tgtSpdText)
+    trigger.action.outTextForCoalition(self.ownerCoalition, text, 5, true)
 end
 
 function VirtualSubmarine:setCourse(heading)
     if heading then
-        self.heading = heading
+        self.targetHeading = heading
         log(self.name .. " new heading: " .. heading .. "°", self.ownerCoalition)
     end
 end
 
 function VirtualSubmarine:setSpeed(speed)
     if speed then
-        self.speed = math.min(speed, self.maxSpeed)
-        log(self.name .. " new speed: " .. self.speed .. " m/s", self.ownerCoalition)
+        self.targetSpeed = math.max(0, math.min(speed, self.maxSpeed))
+        log(self.name .. " new target speed: " .. self.targetSpeed .. " m/s", self.ownerCoalition)
         if speed > self.maxSpeed then
             log(self.name .. " speed clamped to maximum: " .. self.maxSpeed .. " m/s", self.ownerCoalition)
         end
@@ -227,10 +337,15 @@ function VirtualSubmarine:destroy()
     if not self.alive then return end
     self.alive = false
     self.speed = 0
-    if self.marker then
-        self.marker:Remove()
-        self.marker = nil
+    -- Clear trail and arrow marks
+    for _, id in ipairs(self.trailMarkIds) do
+        trigger.action.removeMark(id)
     end
+    self.trailMarkIds = {}
+    for _, id in ipairs(self.arrowMarkIds) do
+        trigger.action.removeMark(id)
+    end
+    self.arrowMarkIds = {}
     self:clearContactMarkers()
     log(self.name .. " has been sunk!", self.ownerCoalition)
     debugMessage(self.name .. " has been sunk at X=" .. string.format("%.1f", self.x) .. " Z=" .. string.format("%.1f", self.z) .. " depth=" .. string.format("%.1f", self.depth) .. "m")
@@ -242,9 +357,17 @@ function VirtualSubmarine:isAlive()
 end
 
 function VirtualSubmarine:markSunkPosition()
-    local coord = COORDINATE:New(self.x, 0, self.z)
+    local point = {x = self.x, y = 0, z = self.z}
+    local red = {1, 0, 0, 1}
+    local coalitionId = -1
+    local circleId = nextSubMarkId()
+    trigger.action.circleToAll(coalitionId, circleId, point, 150, red, {1, 0, 0, 0.3}, 1, true)
+
+    -- Text label
     local text = self.name .. " SUNK | Depth: " .. string.format("%.1f", self.depth) .. "m"
-    MARKER:New(coord, text):ReadOnly():ToCoalition(self.ownerCoalition)
+    local textPoint = {x = self.x + 200, y = 0, z = self.z}
+    local textId = nextSubMarkId()
+    trigger.action.textToAll(coalitionId, textId, textPoint, red, {0, 0, 0, 0}, 12, true, text)
 end
 
 function VirtualSubmarine:getTelemetry()
