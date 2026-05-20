@@ -142,6 +142,12 @@ function HumanSubmarineCommander:fireTorpedo(sub)
 
     self.torpedoes[#self.torpedoes + 1] = torpedo
     self:message(sub.name .. ": Torpedo fired! Heading: " .. string.format("%.0f", sub.heading) .. "° | Remaining: " .. sub.torpedoCount .. "/" .. sub.maxTorpedoes)
+
+    -- Torpedo launch sound for sub coalition + target coalition
+    if ASW_SOUND then
+        ASW_SOUND:playForCoalition(self.ownerCoalition, "torpedo_launch")
+        ASW_SOUND:playForCoalition(self.targetCoalition, "torpedo_launch")
+    end
 end
 
 function HumanSubmarineCommander:torpedoStatus(sub)

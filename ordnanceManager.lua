@@ -113,11 +113,16 @@ function OrdnanceManager:initGroup(groupName)
 
     -- Dipping Sonar submenu
     local sonarMenu = MENU_GROUP:New(mooseGroup, "Dipping Sonar", rootMenu)
-    local sonarDepthMenu = MENU_GROUP:New(mooseGroup, "Set Cable Depth", sonarMenu)
-    for _, d in ipairs({10, 30, 50, 70, 100}) do
-        MENU_GROUP_COMMAND:New(mooseGroup, d .. "m", sonarDepthMenu, self.setSonarDepth, self, groupName, d)
+    local extendMenu = MENU_GROUP:New(mooseGroup, "Extend Cable", sonarMenu)
+    for _, d in ipairs({10, 25, 50, 100}) do
+        MENU_GROUP_COMMAND:New(mooseGroup, "+" .. d .. "m", extendMenu, self.adjustSonarCable, self, groupName, d)
+    end
+    local retractMenu = MENU_GROUP:New(mooseGroup, "Retract Cable", sonarMenu)
+    for _, d in ipairs({10, 25, 50, 100}) do
+        MENU_GROUP_COMMAND:New(mooseGroup, "-" .. d .. "m", retractMenu, self.adjustSonarCable, self, groupName, -d)
     end
     MENU_GROUP_COMMAND:New(mooseGroup, "Lower Sonar", sonarMenu, self.lowerSonar, self, groupName)
+    MENU_GROUP_COMMAND:New(mooseGroup, "Stop Sonar", sonarMenu, self.stopSonar, self, groupName)
     MENU_GROUP_COMMAND:New(mooseGroup, "Raise Sonar", sonarMenu, self.raiseSonar, self, groupName)
 
     -- General
@@ -216,6 +221,13 @@ function OrdnanceManager:launchBuoy(groupName)
         self.buoys[#self.buoys + 1] = buoy
         data.inventory = data.inventory - 1
         self:messageToGroup(groupName, "Buoy deployed! Remaining: " .. data.inventory .. "/" .. self.maxBuoys, 5)
+
+        -- Splash sound for deploying group and enemy coalition (submarine)
+        if ASW_SOUND then
+            ASW_SOUND:playOnce(groupName, "buoy_splash")
+            local enemyCoalition = self.ownerCoalition == coalition.side.BLUE and coalition.side.RED or coalition.side.BLUE
+            ASW_SOUND:playForCoalition(enemyCoalition, "buoy_splash")
+        end
     end
 
     self:stopPrepareMessages(groupName)
@@ -280,6 +292,13 @@ function OrdnanceManager:recoverBuoy(groupName)
     nearestBuoy:remove()
     data.inventory = math.min(data.inventory + 1, self.maxBuoys)
     self:messageToGroup(groupName, nearestBuoy.name .. " recovered! Inventory: " .. data.inventory .. "/" .. self.maxBuoys, 5)
+
+    -- Recover splash sound for recovering group and enemy coalition (submarine)
+    if ASW_SOUND then
+        ASW_SOUND:playOnce(groupName, "recover_splash")
+        local enemyCoalition = self.ownerCoalition == coalition.side.BLUE and coalition.side.RED or coalition.side.BLUE
+        ASW_SOUND:playForCoalition(enemyCoalition, "recover_splash")
+    end
 
     self:stopPrepareMessages(groupName)
     data.state = "idle"
@@ -349,6 +368,13 @@ function OrdnanceManager:launchTorpedo(groupName)
         self:messageToGroup(groupName, string.format(
             "Torpedo away! Heading: %.0f° | Depth: %dm | Torpedoes remaining: %d/%d",
             heading, data.torpedoDepth, data.torpedoInventory, self.maxTorpedoes), 5)
+
+        -- Torpedo launch sound for hunter group + warning for enemy coalition
+        if ASW_SOUND then
+            ASW_SOUND:playOnce(groupName, "torpedo_launch")
+            local enemyCoalition = self.ownerCoalition == coalition.side.BLUE and coalition.side.RED or coalition.side.BLUE
+            ASW_SOUND:playForCoalition(enemyCoalition, "warning_torpedo")
+        end
     end
 
     self:stopPrepareMessages(groupName)
@@ -450,17 +476,33 @@ function OrdnanceManager:rearmAll(groupName)
 end
 
 -- ===== DIPPING SONAR =====
-function OrdnanceManager:setSonarDepth(groupName, depth)
+function OrdnanceManager:adjustSonarCable(groupName, delta)
     local data = self.groupData[groupName]
     if not data or not data.dippingSonar then return end
-    data.dippingSonar:setDepth(depth)
-    self:messageToGroup(groupName, "Dipping sonar cable depth set to " .. depth .. "m", 5)
+    local sonar = data.dippingSonar
+    sonar:adjustCable(delta)
+    local waterDepth = sonar:getWaterDepth()
+    local msg
+    if sonar:isDeployed() then
+        msg = string.format("Cable target: %dm (current: %.0fm) | Sonar depth: %.0fm",
+            sonar.targetCableLength, sonar.currentCableLength, waterDepth)
+    else
+        msg = string.format("Cable target set to %dm (deploy with Lower Sonar)", sonar.targetCableLength)
+    end
+    self:messageToGroup(groupName, msg, 5)
 end
 
 function OrdnanceManager:lowerSonar(groupName)
     local data = self.groupData[groupName]
     if not data or not data.dippingSonar then return end
     local ok, msg = data.dippingSonar:lower()
+    self:messageToGroup(groupName, msg, 5)
+end
+
+function OrdnanceManager:stopSonar(groupName)
+    local data = self.groupData[groupName]
+    if not data or not data.dippingSonar then return end
+    local ok, msg = data.dippingSonar:stop()
     self:messageToGroup(groupName, msg, 5)
 end
 

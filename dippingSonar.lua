@@ -36,15 +36,15 @@ function DippingSonar:new(groupName, ownerCoalition, thermalLayerDepth, submarin
         submarines = submarines or {},
         maxDetectionRange = 8000,    -- 8 km active sonar range
         scaleFactor = 0.25,          -- higher than buoy (0.15)
-        maxCableDepth = 100,         -- max depth in meters
+        maxCableLength = 450,        -- max cable length in meters
         cableRate = 5,               -- meters per second lower/raise
         maxSpeed = 15,               -- m/s before cable breaks
         warnSpeed = 5,               -- m/s speed warning threshold
         maxAltitude = 100,           -- AGL before cable breaks
         warnAltitude = 50,           -- AGL altitude warning threshold
         detectInterval = 3,          -- seconds between pings
-        targetDepth = 50,            -- current set depth
-        currentDepth = 0,            -- actual cable depth
+        targetCableLength = 100,     -- cable length to pay out
+        currentCableLength = 0,      -- cable length currently paid out
         state = "stowed",            -- stowed, lowering, active, raising, broken
         operational = true,          -- false if cable broke
         contactMarkers = {},
@@ -78,9 +78,22 @@ function DippingSonar:getSpeed(unit)
     return math.sqrt(velocity.x^2 + velocity.y^2 + velocity.z^2)
 end
 
--- Set target cable depth
-function DippingSonar:setDepth(depth)
-    self.targetDepth = math.max(0, math.min(depth, self.maxCableDepth))
+-- Set target cable length
+function DippingSonar:setDepth(length)
+    self.targetCableLength = math.max(0, math.min(length, self.maxCableLength))
+end
+
+-- Adjust target cable length by a delta (+extend / -retract)
+function DippingSonar:adjustCable(delta)
+    self.targetCableLength = math.max(0, math.min(self.targetCableLength + delta, self.maxCableLength))
+end
+
+-- Get actual sonar depth in water = cable length - AGL (clamped >= 0)
+function DippingSonar:getWaterDepth(unit)
+    unit = unit or self:getUnit()
+    if not unit then return 0 end
+    local agl = self:getAGL(unit)
+    return math.max(0, self.currentCableLength - agl)
 end
 
 -- Lower the sonar
@@ -89,9 +102,9 @@ function DippingSonar:lower()
     if self.state ~= "stowed" then return false, "Sonar is already deployed!" end
 
     self.state = "lowering"
-    self.currentDepth = 0
+    self.currentCableLength = 0
     self:startUpdateLoop()
-    return true, "Lowering dipping sonar to " .. self.targetDepth .. "m..."
+    return true, "Lowering dipping sonar, cable to " .. self.targetCableLength .. "m..."
 end
 
 -- Raise the sonar
@@ -104,11 +117,23 @@ function DippingSonar:raise()
     return true, "Raising dipping sonar..."
 end
 
+-- Stop the sonar at current cable length
+function DippingSonar:stop()
+    if self.state ~= "lowering" and self.state ~= "raising" then
+        return false, "Sonar is not moving!"
+    end
+
+    self.state = "active"
+    self.targetCableLength = self.currentCableLength
+    local waterDepth = self:getWaterDepth()
+    return true, string.format("Sonar stopped. Cable: %.0fm | Sonar depth: %.0fm", self.currentCableLength, waterDepth)
+end
+
 -- Repair the sonar (at rearm point)
 function DippingSonar:repair()
     self.operational = true
     self.state = "stowed"
-    self.currentDepth = 0
+    self.currentCableLength = 0
 end
 
 function DippingSonar:isDeployed()
@@ -146,39 +171,55 @@ function DippingSonar:startUpdateLoop()
             self:messageToGroup("WARNING: Altitude " .. string.format("%.0f", agl) .. "m AGL! Cable breaks at " .. self.maxAltitude .. "m!", 1)
         end
 
-        -- Update cable depth
+        -- Update cable length
         if self.state == "lowering" then
-            self.currentDepth = self.currentDepth + self.cableRate
-            if self.currentDepth >= self.targetDepth then
-                self.currentDepth = self.targetDepth
+            self.currentCableLength = self.currentCableLength + self.cableRate
+            if self.currentCableLength >= self.targetCableLength then
+                self.currentCableLength = self.targetCableLength
                 self.state = "active"
-                self:messageToGroup("Dipping sonar active at " .. self.currentDepth .. "m depth.", 5)
+                local waterDepth = self:getWaterDepth(unit)
+                self:messageToGroup(string.format("Dipping sonar active. Cable: %dm | Sonar depth: %.0fm", self.currentCableLength, waterDepth), 5)
+                -- Splash sound when sonar enters water (hunter group + enemy coalition)
+                if ASW_SOUND then
+                    ASW_SOUND:playOnce(self.groupName, "sonar_splash")
+                    local enemyCoalition = self.ownerCoalition == coalition.side.BLUE and coalition.side.RED or coalition.side.BLUE
+                    ASW_SOUND:playForCoalition(enemyCoalition, "sonar_splash")
+                end
             else
-                self:messageToGroup(string.format("Lowering... %.0fm / %dm", self.currentDepth, self.targetDepth), 1)
+                self:messageToGroup(string.format("Lowering... Cable: %.0fm / %dm", self.currentCableLength, self.targetCableLength), 1)
+                -- Cable extending sound (hunter group only)
+                if ASW_SOUND then
+                    ASW_SOUND:playOnce(self.groupName, "sonar_extend")
+                end
             end
         elseif self.state == "raising" then
-            self.currentDepth = self.currentDepth - self.cableRate
-            if self.currentDepth <= 0 then
-                self.currentDepth = 0
+            self.currentCableLength = self.currentCableLength - self.cableRate
+            if self.currentCableLength <= 0 then
+                self.currentCableLength = 0
                 self.state = "stowed"
                 self:messageToGroup("Dipping sonar stowed.", 5)
                 return -- Stop the loop
             else
-                self:messageToGroup(string.format("Raising... %.0fm", self.currentDepth), 1)
+                self:messageToGroup(string.format("Raising... Cable: %.0fm", self.currentCableLength), 1)
+                -- Cable retrieving sound (hunter group only)
+                if ASW_SOUND then
+                    ASW_SOUND:playOnce(self.groupName, "sonar_retrieve")
+                end
             end
         elseif self.state == "active" then
-            -- Adjust depth if target changed while active
-            local depthDiff = self.targetDepth - self.currentDepth
-            if math.abs(depthDiff) > 0.1 then
+            -- Adjust cable if target changed while active
+            local cableDiff = self.targetCableLength - self.currentCableLength
+            if math.abs(cableDiff) > 0.1 then
                 local change = self.cableRate
-                if math.abs(depthDiff) <= change then
-                    self.currentDepth = self.targetDepth
-                elseif depthDiff > 0 then
-                    self.currentDepth = self.currentDepth + change
+                if math.abs(cableDiff) <= change then
+                    self.currentCableLength = self.targetCableLength
+                elseif cableDiff > 0 then
+                    self.currentCableLength = self.currentCableLength + change
                 else
-                    self.currentDepth = self.currentDepth - change
+                    self.currentCableLength = self.currentCableLength - change
                 end
-                self:messageToGroup(string.format("Adjusting depth... %.0fm / %dm", self.currentDepth, self.targetDepth), 1)
+                local waterDepth = self:getWaterDepth(unit)
+                self:messageToGroup(string.format("Adjusting cable... %.0fm / %dm | Sonar depth: %.0fm", self.currentCableLength, self.targetCableLength, waterDepth), 1)
             end
 
             -- Ping for submarines
@@ -199,8 +240,16 @@ function DippingSonar:ping(unit)
     local sonarX = pos.x
     local sonarZ = pos.z
 
+    -- Sonar ping sound (hunter group + warning to enemy coalition)
+    if ASW_SOUND then
+        ASW_SOUND:playOnce(self.groupName, "sonar_ping")
+    end
+
     -- Alert enemy coalition about active sonar ping with position
     local enemyCoalition = self.ownerCoalition == coalition.side.BLUE and coalition.side.RED or coalition.side.BLUE
+    if ASW_SOUND then
+        ASW_SOUND:playForCoalition(enemyCoalition, "warning_sonar")
+    end
     local coord = COORDINATE:New(sonarX, 0, sonarZ)
     local coordText = coord:ToStringLLDMS()
     trigger.action.outTextForCoalition(enemyCoalition,
@@ -232,10 +281,11 @@ function DippingSonar:tryDetect(sub, sonarX, sonarZ)
     local depthPenalty = math.max(0.1, 1 - (sub.depth / maxEffectiveDepth))
 
     local thermalPenalty = 1.0
-    if sub.depth > self.thermalLayerDepth and self.currentDepth <= self.thermalLayerDepth then
+    local waterDepth = self:getWaterDepth()
+    if sub.depth > self.thermalLayerDepth and waterDepth <= self.thermalLayerDepth then
         -- Sonar above layer, sub below: reduced
         thermalPenalty = 0.2
-    elseif sub.depth > self.thermalLayerDepth and self.currentDepth > self.thermalLayerDepth then
+    elseif sub.depth > self.thermalLayerDepth and waterDepth > self.thermalLayerDepth then
         -- Both below layer: no penalty (sonar is down there with the sub)
         thermalPenalty = 1.0
     end
@@ -301,10 +351,14 @@ end
 function DippingSonar:breakCable(reason)
     self.state = "broken"
     self.operational = false
-    self.currentDepth = 0
+    self.currentCableLength = 0
     self:stopUpdateLoop()
     self:clearContactMarkers()
     self:messageToGroup("DIPPING SONAR LOST! " .. reason, 10)
+    -- Cable break sound (hunter group only)
+    if ASW_SOUND then
+        ASW_SOUND:playOnce(self.groupName, "sonar_cable_break")
+    end
 end
 
 function DippingSonar:stopUpdateLoop()

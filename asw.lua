@@ -91,8 +91,41 @@ local HUNTER_CONFIG = {
 }
 
 -- =============================================================================
+-- 6. SOUND CONFIGURATION
+-- =============================================================================
+-- Sound files must be placed inside the .miz file (l10n/DEFAULT/ prefix added automatically).
+-- Set duration to the actual length of each sound file in seconds.
+-- Set to nil to disable a sound.
+
+local SOUND_CONFIG = {
+    sonar_ping      = { file = "sonar_ping.ogg",       duration = 2,   priority = SoundScheduler.PRIORITY.NORMAL },
+    sonar_extend    = { file = "sonar_extend.ogg",     duration = 3,   priority = SoundScheduler.PRIORITY.LOW },
+    sonar_retrieve  = { file = "sonar_retrieve.ogg",   duration = 3,   priority = SoundScheduler.PRIORITY.LOW },
+    sonar_splash    = { file = "sonar_splash.ogg",     duration = 2,   priority = SoundScheduler.PRIORITY.NORMAL },
+    sonar_cable_break = { file = "sonar_cable_break.ogg", duration = 2, priority = SoundScheduler.PRIORITY.HIGH },
+    torpedo_launch  = { file = "torpedo_launch.ogg",    duration = 3,   priority = SoundScheduler.PRIORITY.CRITICAL },
+    torpedo_homing  = { file = "torpedo_homing.ogg",    duration = 2,   priority = SoundScheduler.PRIORITY.HIGH },
+    buoy_splash     = { file = "buoy_splash.ogg",       duration = 2,   priority = SoundScheduler.PRIORITY.NORMAL },
+    recover_splash  = { file = "recover_splash.ogg",    duration = 2,   priority = SoundScheduler.PRIORITY.NORMAL },
+    noisemaker_loop = { file = "noisemaker_active.ogg",  duration = 3,   priority = SoundScheduler.PRIORITY.LOW },
+    warning_torpedo = { file = "warning_torpedo.ogg",   duration = 3,   priority = SoundScheduler.PRIORITY.ALERT },
+    warning_sonar   = { file = "warning_sonar.ogg",     duration = 2,   priority = SoundScheduler.PRIORITY.ALERT },
+}
+
+-- =============================================================================
 -- END OF CONFIGURATION — do not edit below unless you know what you're doing
 -- =============================================================================
+
+-- ===== Sound Scheduler =====
+local soundScheduler = SoundScheduler:new()
+for name, cfg in pairs(SOUND_CONFIG) do
+    if cfg then
+        soundScheduler:register(name, cfg.file, cfg.duration, cfg.priority)
+    end
+end
+
+-- Make scheduler globally accessible for other modules
+ASW_SOUND = soundScheduler
 
 -- ===== Create Submarine =====
 local submarine

@@ -18,10 +18,11 @@ Load scripts in this order in the DCS Mission Editor (DO ONCE triggers):
 4. `anti_submarine_torpedo.lua`
 5. `submarineTorpedo.lua`
 6. `dippingSonar.lua`
-7. `ordnanceManager.lua`
-8. `humanSubmarineCommander.lua`
-9. `aiSubmarineCommander.lua`
-10. `asw.lua`
+7. `soundScheduler.lua`
+8. `ordnanceManager.lua`
+9. `humanSubmarineCommander.lua`
+10. `aiSubmarineCommander.lua`
+11. `asw.lua`
 
 ## Mission Editor Setup
 
@@ -423,6 +424,7 @@ HUNTER_CONFIG = {
 | `anti_submarine_torpedo.lua` | `AntiSubmarineTorpedo` | Player-launched ASW torpedo with active homing sonar |
 | `submarineTorpedo.lua` | `SubmarineTorpedo` | Submarine-launched anti-ship torpedo with cone sonar |
 | `dippingSonar.lua` | `DippingSonar` | Active dipping sonar deployed from hovering helicopter |
+| `soundScheduler.lua` | `SoundScheduler` | Priority-based sound playback scheduler per group |
 | `ordnanceManager.lua` | `OrdnanceManager` | Manages hunter group menus, inventory, buoy/torpedo/sonar operations |
 | `humanSubmarineCommander.lua` | `HumanSubmarineCommander` | F10 menus for human submarine control |
 | `aiSubmarineCommander.lua` | `AISubmarineCommander` | Autonomous submarine AI with patrol/attack/evade states |

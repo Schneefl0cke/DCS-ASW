@@ -63,6 +63,7 @@ function AntiSubmarineTorpedo:new(name, x, z, heading, searchDepth, ownerCoaliti
         elapsedTime = 0,
         lastUpdateTime = timer.getTime(),
         lastMarkerTime = 0,         -- Track when last marker was created
+        lastHomingPingTime = 0,      -- Track homing ping interval
         prevMarkerX = x,
         prevMarkerZ = z,
         markerIds = {},
@@ -181,6 +182,16 @@ function AntiSubmarineTorpedo:detectAndHome(dt)
                 end
                 self.hasTarget = true
                 detected = true
+                -- Homing ping sound every 3 seconds (both coalitions)
+                local now = timer.getTime()
+                if now - self.lastHomingPingTime >= 3 then
+                    self.lastHomingPingTime = now
+                    if ASW_SOUND then
+                        local enemyCoalition = self.ownerCoalition == coalition.side.BLUE and coalition.side.RED or coalition.side.BLUE
+                        ASW_SOUND:playForCoalition(self.ownerCoalition, "torpedo_homing")
+                        ASW_SOUND:playForCoalition(enemyCoalition, "torpedo_homing")
+                    end
+                end
                 -- Store last known position
                 self.lastContactX = contact.x
                 self.lastContactZ = contact.z

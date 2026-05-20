@@ -78,6 +78,10 @@ function NoiseMaker:startUpdateLoop()
             if self.elapsedTime >= self.activationDelay then
                 self.active = true
                 log(self.name .. " ACTIVATED! Emitting noise.", self.ownerCoalition)
+                -- Activation sound (sub coalition only)
+                if ASW_SOUND then
+                    ASW_SOUND:playForCoalition(self.ownerCoalition, "noisemaker_loop")
+                end
             end
         else
             -- Active: count active time and check battery
