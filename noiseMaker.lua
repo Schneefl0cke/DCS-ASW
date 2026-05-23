@@ -26,6 +26,11 @@ function NoiseMaker:new(name, x, z, depth, activationDelay, ownerCoalition, ther
     local driftHeading = math.random() * 360
     local obj = {
         name = name,
+        -- Position at deployment (captured immediately)
+        deployX = x,
+        deployZ = z,
+        deployDepth = depth,
+        -- Current position (may drift after activation)
         x = x,
         z = z,
         depth = depth,
@@ -138,17 +143,24 @@ end
 
 -- Update F10 map marker (visible to sub coalition only)
 function NoiseMaker:updateMarker()
-    local coord = COORDINATE:New(self.x, 0, self.z)
+    local coord
     local status
+
     if not self.active then
+        -- While in standby use the captured deployment coordinates/depth
+        coord = COORDINATE:New(self.deployX, 0, self.deployZ)
         local remaining = self.activationDelay - self.elapsedTime
         status = string.format("STANDBY (%.0fs)", math.max(0, remaining))
     else
+        -- Once active use the decoy's current (possibly drifting) position
+        coord = COORDINATE:New(self.x, 0, self.z)
         local remaining = self.batteryLife - self.activeTime
         status = string.format("ACTIVE (%.0fs)", math.max(0, remaining))
     end
+
+    local depthToShow = self.deployDepth or self.depth
     local text = string.format("%s | DECOY | %s | Depth: %.0fm",
-        self.name, status, self.depth)
+        self.name, status, depthToShow)
 
     if self.marker then
         self.marker:UpdateCoordinate(coord)
