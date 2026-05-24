@@ -30,7 +30,7 @@ Load scripts in this order in the DCS Mission Editor (DO ONCE triggers):
 
 | Zone Name | Purpose |
 |---|---|
-| `Submarine_initial_position` | Spawn location for the submarine (configurable in `asw.lua`) |
+| `Submarine_initial_position` | Spawn location for the submarine (configurable in `asw_config.lua`) |
 | `ASW_Hunter_Rearming` | Circle zone where ASW aircraft land/hover to rearm (not needed if using `rearmUnits`) |
 | `patrol_1`, `patrol_2`, ... | Patrol waypoints for AI submarine commander (only needed if using AI) |
 
@@ -44,7 +44,7 @@ Load scripts in this order in the DCS Mission Editor (DO ONCE triggers):
 - **RED**: Submarine side (default)
 - **BLUE**: ASW hunter side (default)
 
-Both are configurable in `asw.lua`.
+Both are configurable in `asw_config.lua`.
 
 ---
 
@@ -247,7 +247,7 @@ An automated commander that replaces or supplements the human submarine controll
 
 ### Setup
 
-Set `COMMANDER_MODE` in `asw.lua`:
+Set `COMMANDER_MODE` in `asw_config.lua`:
 
 ```lua
 COMMANDER_MODE = "human"    -- F10 menu only
@@ -361,7 +361,7 @@ probability = 0.9 × distanceFactor
 
 ## Configuration Reference
 
-All values are configurable in the `asw.lua` configuration tables:
+All values are configurable in the `asw_config.lua` configuration tables:
 
 ```lua
 -- 1. Coalitions
@@ -429,4 +429,4 @@ HUNTER_CONFIG = {
 | `ordnanceManager.lua` | `OrdnanceManager` | Manages hunter group menus, inventory, buoy/torpedo/sonar operations |
 | `humanSubmarineCommander.lua` | `HumanSubmarineCommander` | F10 menus for human submarine control |
 | `aiSubmarineCommander.lua` | `AISubmarineCommander` | Autonomous submarine AI with patrol/attack/evade states |
-| `asw.lua` | — | Main entry point, configuration, wiring |
+| `asw_config.lua` | — | Main entry point, configuration, wiring |
