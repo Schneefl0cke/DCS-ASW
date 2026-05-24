@@ -60,6 +60,7 @@ function AISubmarineCommander:new(sub, config)
         -- State
         state = "patrol",      -- patrol, attack, evade
         currentWaypoint = nil,
+        currentWaypointName = nil,
         waypointOrder = {},
         waypointIndex = 0,
         attackTarget = nil,
@@ -68,10 +69,13 @@ function AISubmarineCommander:new(sub, config)
         lastUpdateTime = timer.getTime(),
         torpedoIdCounter = 0,
         noiseMakerIdCounter = 0,
-        updateScheduleId = nil
+        updateScheduleId = nil,
+        aiStatusTextId = nil,
+        planText = ""
     }
     setmetatable(obj, AISubmarineCommander)
 
+    obj.aiStatusTextId = nextAiMarkId()
     obj:shuffleWaypoints()
     obj:nextWaypoint()
     obj:markPatrolPoints()
@@ -111,6 +115,7 @@ function AISubmarineCommander:nextWaypoint()
     local zone = trigger.misc.getZone(zoneName)
     if zone then
         self.currentWaypoint = {x = zone.point.x, z = zone.point.z}
+        self.currentWaypointName = zoneName
         debugMessage(self.sub.name .. " AI: heading to waypoint " .. zoneName)
     end
 end
@@ -144,13 +149,32 @@ function AISubmarineCommander:markPatrolPoints()
     end
 end
 
+function AISubmarineCommander:updateStatusDisplay()
+    if not self.aiStatusTextId then return end
+
+    local coalitionId = self.sub.ownerCoalition or -1
+    local textPoint = {x = self.sub.x + 200, y = 0, z = self.sub.z}
+    local color = {0, 1, 0, 1}
+    local bg = {0, 0, 0, 0.5}
+    local status = "AI: " .. string.upper(self.state or "UNKNOWN")
+    local plan = self.planText or ""
+
+    if plan ~= "" then
+        status = status .. " | " .. plan
+    end
+
+    trigger.action.textToAll(coalitionId, self.aiStatusTextId, textPoint, color, bg, 12, true, status)
+end
+
 -- Start patrol state
 function AISubmarineCommander:startPatrol()
     self.state = "patrol"
     self.torpedosFiredThisAttack = 0
+    self.planText = "Heading to " .. tostring(self.currentWaypointName or "next waypoint")
     self.sub:setSpeed(self.patrolSpeed)
     self.sub:setTargetDepth(self.patrolDepth)
     self:steerToWaypoint()
+    self:updateStatusDisplay()
 end
 
 -- Steer toward current waypoint
@@ -192,6 +216,8 @@ function AISubmarineCommander:startUpdateLoop()
             self:updateEvade(dt)
         end
 
+        self:updateStatusDisplay()
+
         self.updateScheduleId = timer.scheduleFunction(function()
             update()
         end, nil, timer.getTime() + 5)
@@ -228,6 +254,7 @@ function AISubmarineCommander:startAttack(target)
     self.state = "attack"
     self.attackTarget = target
     self.torpedosFiredThisAttack = 0
+    self.planText = "Engage " .. tostring(target.unitName)
 
     -- Turn toward target
     local dx = target.x - self.sub.x
@@ -238,6 +265,7 @@ function AISubmarineCommander:startAttack(target)
     self.sub:setSpeed(self.attackSpeed)
     self.sub:setTargetDepth(20) -- periscope depth for torpedo launch
 
+    self:updateStatusDisplay()
     log(self.sub.name .. " AI: Target detected! Moving to attack.", self.sub.ownerCoalition)
 end
 
@@ -290,12 +318,14 @@ function AISubmarineCommander:abortAttackAndEvade()
     self.attackTarget = nil
     self.state = "evade"
     self.evasionTimer = 0
+    self.planText = "Disengage and dive deep"
 
     -- Dive deep, random heading toward a patrol point
     self.sub:setTargetDepth(self.sub.maxDepth)
     self.sub:setSpeed(self.evasionSpeed)
     self:nextWaypoint()
     self:steerToWaypoint()
+    self:updateStatusDisplay()
 
     log(self.sub.name .. " AI: Disengaging. Diving deep.", self.sub.ownerCoalition)
 end
@@ -307,6 +337,7 @@ function AISubmarineCommander:startBuoyEvasion()
     self.state = "evade"
     self.evasionTimer = 0
     self.attackTarget = nil
+    self.planText = "Evade nearby buoy"
 
     -- Find the nearest buoy to flee from
     local nearestBuoy = self:findNearestBuoy()
@@ -327,6 +358,7 @@ function AISubmarineCommander:startBuoyEvasion()
         self.sub:setCourse(finalHeading)
     end
 
+    self:updateStatusDisplay()
     log(self.sub.name .. " AI: Buoy detected nearby! Evading.", self.sub.ownerCoalition)
 end
 
@@ -335,6 +367,7 @@ function AISubmarineCommander:startTorpedoEvasion()
     self.state = "evade"
     self.evasionTimer = 0
     self.attackTarget = nil
+    self.planText = "Evade incoming ASW torpedo"
 
     -- Deploy noise maker immediately (no delay for torpedo distraction)
     if self.sub.noiseMakerCount > 0 then
@@ -358,6 +391,7 @@ function AISubmarineCommander:startTorpedoEvasion()
     -- Random heading
     self.sub:setCourse(math.random(0, 359))
 
+    self:updateStatusDisplay()
     log(self.sub.name .. " AI: ASW TORPEDO DETECTED! Emergency evasion!", self.sub.ownerCoalition)
 end
 
@@ -456,6 +490,7 @@ function AISubmarineCommander:startDippingSonarEvasion()
     self.state = "evade"
     self.evasionTimer = 0
     self.attackTarget = nil
+    self.planText = "Evade active dipping sonar"
 
     -- Find nearest active dipping sonar
     local nearestDist = math.huge
@@ -495,6 +530,7 @@ function AISubmarineCommander:startDippingSonarEvasion()
         self:deployNoiseMaker(60) -- 60 second delay
     end
 
+    self:updateStatusDisplay()
     log(self.sub.name .. " AI: Active sonar detected! Evading deep.", self.sub.ownerCoalition)
 end
 
