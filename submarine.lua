@@ -185,13 +185,34 @@ function VirtualSubmarine:update()
     self.x = self.x + dx
     self.z = self.z + dz
 
+    local waterDepth = self:getWaterDepth()
+    debugMessage("own depth: "..self.depth, 5)
+
+    if waterDepth <= 0 then
+        log(self.name .. " has run aground and is destroyed! No water at current position.", self.ownerCoalition)
+        self:destroy()
+        return
+    elseif waterDepth < 50 then
+        log(self.name .. " WARNING: shallow water ahead (" .. string.format("%.1f", waterDepth) .. "m)! Avoid approaching shore.", self.ownerCoalition)
+    end
+
+    local effectiveTargetDepth = math.min(self.targetDepth, waterDepth)
+    if effectiveTargetDepth < self.targetDepth then
+        log(self.name .. " WARNING: requested depth " .. self.targetDepth .. "m exceeds local water depth " .. string.format("%.1f", waterDepth) .. "m; operating at max possible depth.", self.ownerCoalition)
+    end
+
+    if self.depth > waterDepth then
+        self.depth = waterDepth
+        log(self.name .. " has been raised to the sea bottom at " .. string.format("%.1f", waterDepth) .. "m depth.", self.ownerCoalition)
+    end
+
     -- Gradually change depth toward targetDepth
-    local depthDiff = self.targetDepth - self.depth
+    local depthDiff = effectiveTargetDepth - self.depth
     if math.abs(depthDiff) > 0.01 then
         local maxChange = self.depthRate * dt
         if math.abs(depthDiff) <= maxChange then
-            self.depth = self.targetDepth
-            log(self.name .. " reached target depth: " .. self.targetDepth .. "m", self.ownerCoalition)
+            self.depth = effectiveTargetDepth
+            log(self.name .. " reached target depth: " .. effectiveTargetDepth .. "m", self.ownerCoalition)
         elseif depthDiff > 0 then
             self.depth = self.depth + maxChange
         else
@@ -330,6 +351,12 @@ function VirtualSubmarine:setTargetDepth(targetDepth)
             log(self.name .. " depth clamped to minimum: 0m (surface)", self.ownerCoalition)
         end
     end
+end
+
+function VirtualSubmarine:getWaterDepth()
+    local alt, depth = land.getSurfaceHeightWithSeabed({x = self.x, y = self.z})
+    debugMessage("Depth at point: "..depth, 5)
+    return math.max(0, depth)
 end
 
 function VirtualSubmarine:destroy()
