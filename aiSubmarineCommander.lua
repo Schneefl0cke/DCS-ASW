@@ -29,6 +29,12 @@ end
 --   buoys: reference to buoys table for awareness
 --   torpedoes: reference to ASW torpedoes table for awareness
 --   detectableObjects: shared submarines table to insert noise makers into
+local function nextAiMarkId()
+    if not _aiSubMarkIdCounter then _aiSubMarkIdCounter = 400000 end
+    _aiSubMarkIdCounter = _aiSubMarkIdCounter + 1
+    return _aiSubMarkIdCounter
+end
+
 function AISubmarineCommander:new(sub, config)
     config = config or {}
 
@@ -118,12 +124,6 @@ function AISubmarineCommander:nextWaypoint()
         self.currentWaypointName = zoneName
         debugMessage(self.sub.name .. " AI: heading to waypoint " .. zoneName)
     end
-end
-
-local function nextAiMarkId()
-    if not _aiSubMarkIdCounter then _aiSubMarkIdCounter = 400000 end
-    _aiSubMarkIdCounter = _aiSubMarkIdCounter + 1
-    return _aiSubMarkIdCounter
 end
 
 function AISubmarineCommander:markPatrolPoints()
