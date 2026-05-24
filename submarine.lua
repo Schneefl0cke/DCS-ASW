@@ -185,6 +185,15 @@ function VirtualSubmarine:update()
     self.x = self.x + dx
     self.z = self.z + dz
 
+    local waterDepth = self:getWaterDepth()
+    if waterDepth <= 0 then
+        log(self.name .. " has run aground and is destroyed! No water at current position.", self.ownerCoalition)
+        self:destroy()
+        return
+    elseif waterDepth < 50 then
+        log(self.name .. " WARNING: shallow water ahead (" .. string.format("%.1f", waterDepth) .. "m)! Avoid approaching shore.", self.ownerCoalition)
+    end
+
     -- Gradually change depth toward targetDepth
     local depthDiff = self.targetDepth - self.depth
     if math.abs(depthDiff) > 0.01 then
@@ -330,6 +339,11 @@ function VirtualSubmarine:setTargetDepth(targetDepth)
             log(self.name .. " depth clamped to minimum: 0m (surface)", self.ownerCoalition)
         end
     end
+end
+
+function VirtualSubmarine:getWaterDepth()
+    local terrainHeight = land.getHeight({x = self.x, y = self.z})
+    return math.max(0, -terrainHeight)
 end
 
 function VirtualSubmarine:destroy()
