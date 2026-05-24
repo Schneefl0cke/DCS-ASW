@@ -194,13 +194,23 @@ function VirtualSubmarine:update()
         log(self.name .. " WARNING: shallow water ahead (" .. string.format("%.1f", waterDepth) .. "m)! Avoid approaching shore.", self.ownerCoalition)
     end
 
+    local effectiveTargetDepth = math.min(self.targetDepth, waterDepth)
+    if effectiveTargetDepth < self.targetDepth then
+        log(self.name .. " WARNING: requested depth " .. self.targetDepth .. "m exceeds local water depth " .. string.format("%.1f", waterDepth) .. "m; operating at max possible depth.", self.ownerCoalition)
+    end
+
+    if self.depth > waterDepth then
+        self.depth = waterDepth
+        log(self.name .. " has been raised to the sea bottom at " .. string.format("%.1f", waterDepth) .. "m depth.", self.ownerCoalition)
+    end
+
     -- Gradually change depth toward targetDepth
-    local depthDiff = self.targetDepth - self.depth
+    local depthDiff = effectiveTargetDepth - self.depth
     if math.abs(depthDiff) > 0.01 then
         local maxChange = self.depthRate * dt
         if math.abs(depthDiff) <= maxChange then
-            self.depth = self.targetDepth
-            log(self.name .. " reached target depth: " .. self.targetDepth .. "m", self.ownerCoalition)
+            self.depth = effectiveTargetDepth
+            log(self.name .. " reached target depth: " .. effectiveTargetDepth .. "m", self.ownerCoalition)
         elseif depthDiff > 0 then
             self.depth = self.depth + maxChange
         else
