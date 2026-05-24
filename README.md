@@ -37,6 +37,7 @@ Load scripts in this order in the DCS Mission Editor (DO ONCE triggers):
 ### Required Groups
 
 - ASW hunter aircraft groups must have **`_asw_hunter`** in their group name (configurable). Each group should be a single aircraft (helicopter recommended).
+- Single-player is possible, but not recommended; a second player or AI copilot for the helicopters improves the experience significantly.
 
 ### Coalition Setup
 
