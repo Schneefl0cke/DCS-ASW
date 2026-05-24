@@ -108,7 +108,7 @@ Available under the group radio menu for any aircraft group with `_asw_hunter` i
 | **Prepare to Launch Buoy** | Enter launch mode. HUD shows altitude/speed readiness. |
 | **Launch Buoy!** | Deploy a sonarbuoy at current position. Requires: Alt < 50m AGL, Speed < 60 m/s. |
 | **Prepare to Recover Buoy** | Enter recovery mode. HUD shows nearest buoy distance. |
-| **Recover Buoy!** | Pick up nearest buoy within 200m. Returns it to inventory. |
+| **Recover Buoy!** | Pick up nearest buoy within 10m. Returns it to inventory. |
 
 - Each hunter carries **4 buoys** (configurable)
 - Buoys detect submarines every 5 seconds using a probability-based model

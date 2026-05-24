@@ -22,7 +22,7 @@ end
 --   maxTorpedoes: max torpedoes per group (default 1)
 --   maxAltitude: max altitude AGL in meters for deploy/recover/launch (default 50)
 --   maxSpeed: max speed in m/s for deploy/recover/launch (default 60)
---   recoveryRange: max distance to recover a buoy (default 200)
+--   recoveryRange: max distance to recover a buoy (default 10)
 --   thermalLayerDepth: thermal layer depth for spawned buoys and torpedoes (default 90)
 --   detectInterval: seconds between detection cycles (default 5)
 function OrdnanceManager:new(config)
@@ -37,7 +37,7 @@ function OrdnanceManager:new(config)
         maxTorpedoes = config.maxTorpedoes or 1,
         maxAltitude = config.maxAltitude or 50,
         maxSpeed = config.maxSpeed or 60,
-        recoveryRange = config.recoveryRange or 200,
+        recoveryRange = config.recoveryRange or 10,
         thermalLayerDepth = config.thermalLayerDepth or 90,
         detectInterval = config.detectInterval or 5,
         buoys = {},          -- all deployed buoys

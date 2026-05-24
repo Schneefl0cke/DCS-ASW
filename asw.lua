@@ -86,7 +86,7 @@ local HUNTER_CONFIG = {
     maxTorpedoes    = 1,                            -- ASW torpedoes per hunter
     maxAltitude     = 50,                           -- Max AGL for deploy/recover/launch (meters)
     maxSpeed        = 60,                           -- Max speed for deploy/recover/launch (m/s)
-    recoveryRange   = 200,                          -- Max distance to recover a buoy (meters)
+    recoveryRange   = 10,                           -- Max distance to recover a buoy (meters)
     detectInterval  = 5,                            -- Seconds between sonarbuoy detection cycles
 }
 
