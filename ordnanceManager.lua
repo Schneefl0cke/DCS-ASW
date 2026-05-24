@@ -16,8 +16,8 @@ end
 --   submarines: table of VirtualSubmarine instances to detect
 --   hunterPrefix: group name prefix to find hunter groups (e.g. "_asw_hunter")
 --   rearmZone: trigger zone name where hunters can rearm (static fallback)
---   rearmUnit: DCS unit name to use as moving rearm point (e.g. carrier), overrides rearmZone
---   rearmRadius: radius around rearmUnit for rearming (default 500)
+--   rearmUnits: table of DCS unit names to use as moving rearm points (e.g. {"CVN-74", "CVN-75"}), overrides rearmZone
+--   rearmRadius: radius around each rearmUnit for rearming (default 500)
 --   maxBuoys: max buoys per group (default 4)
 --   maxTorpedoes: max torpedoes per group (default 1)
 --   maxAltitude: max altitude AGL in meters for deploy/recover/launch (default 50)
@@ -31,7 +31,7 @@ function OrdnanceManager:new(config)
         submarines = config.submarines or {},
         hunterPrefix = config.hunterPrefix or "_asw_hunter",
         rearmZone = config.rearmZone or "ASW_Hunter_Rearming",
-        rearmUnit = config.rearmUnit or nil,
+        rearmUnits = config.rearmUnits or {},
         rearmRadius = config.rearmRadius or 500,
         maxBuoys = config.maxBuoys or 4,
         maxTorpedoes = config.maxTorpedoes or 1,
@@ -482,15 +482,20 @@ function OrdnanceManager:rearmAll(groupName)
     local pos = unit:getPoint()
     local inRange = false
 
-    -- Check rearm unit first (moving platform like a carrier)
-    if self.rearmUnit then
-        local rearmDcsUnit = Unit.getByName(self.rearmUnit)
-        if rearmDcsUnit and rearmDcsUnit:isExist() then
-            local rPos = rearmDcsUnit:getPoint()
-            local dx = pos.x - rPos.x
-            local dz = pos.z - rPos.z
-            local dist = math.sqrt(dx * dx + dz * dz)
-            inRange = dist <= self.rearmRadius
+    -- Check rearm units first (moving platforms like carriers)
+    if self.rearmUnits and #self.rearmUnits > 0 then
+        for _, unitName in ipairs(self.rearmUnits) do
+            local rearmDcsUnit = Unit.getByName(unitName)
+            if rearmDcsUnit and rearmDcsUnit:isExist() then
+                local rPos = rearmDcsUnit:getPoint()
+                local dx = pos.x - rPos.x
+                local dz = pos.z - rPos.z
+                local dist = math.sqrt(dx * dx + dz * dz)
+                if dist <= self.rearmRadius then
+                    inRange = true
+                    break
+                end
+            end
         end
     else
         -- Fallback to static trigger zone

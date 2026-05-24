@@ -22,7 +22,7 @@ Load scripts in this order in the DCS Mission Editor (DO ONCE triggers):
 8. `ordnanceManager.lua`
 9. `humanSubmarineCommander.lua`
 10. `aiSubmarineCommander.lua`
-11. `asw.lua`
+11. `asw_config.lua`
 
 ## Mission Editor Setup
 
@@ -31,7 +31,7 @@ Load scripts in this order in the DCS Mission Editor (DO ONCE triggers):
 | Zone Name | Purpose |
 |---|---|
 | `Submarine_initial_position` | Spawn location for the submarine (configurable in `asw.lua`) |
-| `ASW_Hunter_Rearming` | Circle zone where ASW aircraft land/hover to rearm (not needed if using `rearmUnit`) |
+| `ASW_Hunter_Rearming` | Circle zone where ASW aircraft land/hover to rearm (not needed if using `rearmUnits`) |
 | `patrol_1`, `patrol_2`, ... | Patrol waypoints for AI submarine commander (only needed if using AI) |
 
 ### Required Groups
@@ -401,7 +401,7 @@ AI_CONFIG = {
 HUNTER_CONFIG = {
     prefix          = "_asw_hunter",
     rearmZone       = "ASW_Hunter_Rearming",
-    rearmUnit       = nil,          -- carrier unit name (e.g. "CVN-74")
+    rearmUnits      = {},               -- carrier unit names (e.g. {"CVN-74", "CVN-75"})
     rearmRadius     = 500,
     maxBuoys        = 4,
     maxTorpedoes    = 1,
