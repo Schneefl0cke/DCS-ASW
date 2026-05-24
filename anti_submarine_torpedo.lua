@@ -321,6 +321,8 @@ function AntiSubmarineTorpedo:hitTarget(sub)
     self:clearMarker()
 
     if isDecoy then
+        local point = {x = sub.x, y = 0, z = sub.z}
+        trigger.action.explosion(point, 1000)
         sub:remove()
         logAll("*** TORPEDO IMPACT! " .. self.name .. " hit a decoy! ***", 15)
         local text = self.name .. " | IMPACT | DECOY DESTROYED"
