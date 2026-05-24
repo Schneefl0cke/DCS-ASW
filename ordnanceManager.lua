@@ -204,10 +204,11 @@ function OrdnanceManager:checkFlightParams(unit)
 
     local altOk = altitudeAGL <= self.maxAltitude
     local spdOk = speed <= self.maxSpeed
+    local speedKt = speed * 1.943844
 
-    local msg = string.format("Alt: %.0fm AGL %s | Speed: %.0f m/s %s",
+    local msg = string.format("Alt: %.0fm AGL %s | Speed: %.0f kt %s",
         altitudeAGL, altOk and "OK" or "TOO HIGH",
-        speed, spdOk and "OK" or "TOO FAST")
+        speedKt, spdOk and "OK" or "TOO FAST")
 
     return altOk and spdOk, msg
 end
@@ -228,7 +229,8 @@ function OrdnanceManager:prepareToLaunch(groupName)
     end
 
     data.state = "preparing_launch"
-    self:messageToGroup(groupName, "Preparing to launch buoy. Get into position.\nAlt < " .. self.maxAltitude .. "m AGL | Speed < " .. self.maxSpeed .. " m/s", 5)
+    local maxSpeedKt = self.maxSpeed * 1.943844
+    self:messageToGroup(groupName, "Preparing to launch buoy. Get into position.\nAlt < " .. self.maxAltitude .. "m AGL | Speed < " .. string.format("%.0f", maxSpeedKt) .. " kt", 5)
     self:startPrepareMessages(groupName)
 end
 
@@ -284,7 +286,8 @@ function OrdnanceManager:prepareToRecover(groupName)
     end
 
     data.state = "preparing_recover"
-    self:messageToGroup(groupName, "Preparing to recover buoy. Fly near a deployed buoy.\nAlt < " .. self.maxAltitude .. "m AGL | Speed < " .. self.maxSpeed .. " m/s | Range < " .. self.recoveryRange .. "m", 5)
+    local maxSpeedKt = self.maxSpeed * 1.943844
+    self:messageToGroup(groupName, "Preparing to recover buoy. Fly near a deployed buoy.\nAlt < " .. self.maxAltitude .. "m AGL | Speed < " .. string.format("%.0f", maxSpeedKt) .. " kt | Range < " .. self.recoveryRange .. "m", 5)
     self:startPrepareMessages(groupName)
 end
 
@@ -368,7 +371,8 @@ function OrdnanceManager:prepareToLaunchTorpedo(groupName)
     end
 
     data.state = "preparing_torpedo"
-    self:messageToGroup(groupName, "Preparing to launch torpedo.\nSearch depth: " .. data.torpedoDepth .. "m\nAlt < " .. self.maxAltitude .. "m AGL | Speed < " .. self.maxSpeed .. " m/s\nTorpedo will follow your current heading.", 5)
+    local maxSpeedKt = self.maxSpeed * 1.943844
+    self:messageToGroup(groupName, "Preparing to launch torpedo.\nSearch depth: " .. data.torpedoDepth .. "m\nAlt < " .. self.maxAltitude .. "m AGL | Speed < " .. string.format("%.0f", maxSpeedKt) .. " kt\nTorpedo will follow your current heading.", 5)
     self:startPrepareMessages(groupName)
 end
 
