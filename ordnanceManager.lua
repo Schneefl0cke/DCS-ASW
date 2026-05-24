@@ -144,7 +144,7 @@ function OrdnanceManager:initGroup(groupName)
     -- Torpedo submenu
     local torpedoMenu = MENU_GROUP:New(mooseGroup, "Torpedo", rootMenu)
     local depthMenu = MENU_GROUP:New(mooseGroup, "Set Search Depth", torpedoMenu)
-    for _, d in ipairs({0, 100, 200, 300, 400, 500}) do
+    for _, d in ipairs({0, 50, 100, 150, 200, 250, 300, 400, 500}) do
         MENU_GROUP_COMMAND:New(mooseGroup, d .. "m", depthMenu, self.setTorpedoDepth, self, groupName, d)
     end
     MENU_GROUP_COMMAND:New(mooseGroup, "Prepare to Launch Torpedo", torpedoMenu, self.prepareToLaunchTorpedo, self, groupName)

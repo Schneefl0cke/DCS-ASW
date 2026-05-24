@@ -31,7 +31,7 @@ end
 -- name: Identifier (e.g. "Hunter1-Torpedo-1")
 -- x, z: DCS world coordinates at launch
 -- heading: Initial heading in degrees (player's heading)
--- searchDepth: Depth to run at in meters (0, 100, 200, 300, 400, 500)
+-- searchDepth: Depth to run at in meters (0, 50, 100, 150, 200, 250, 300, 400, 500)
 -- ownerCoalition: coalition side
 -- submarines: table of VirtualSubmarine instances to hunt
 -- thermalLayerDepth: thermal layer depth for detection (default 90)

@@ -121,7 +121,7 @@ Available under the group radio menu for any aircraft group with `_asw_hunter` i
 
 | Command | Description |
 |---|---|
-| **Set Search Depth** | Choose torpedo run depth: 0m, 100m, 200m, 300m, 400m, or 500m |
+| **Set Search Depth** | Choose torpedo run depth: 0m, 50m, 100m, 150m, 200m, 250m, 300m, 400m, or 500m |
 | **Prepare to Launch Torpedo** | Enter launch mode. HUD shows heading + depth setting. |
 | **Launch Torpedo!** | Fire torpedo on player's current heading. Same flight parameter requirements as buoys. |
 
