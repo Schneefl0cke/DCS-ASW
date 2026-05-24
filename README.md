@@ -46,6 +46,22 @@ Load scripts in this order in the DCS Mission Editor (DO ONCE triggers):
 
 Both are configurable in `asw_config.lua`.
 
+## Sound Setup
+
+This framework supports mission sound cues through `soundScheduler.lua` and `asw_config.lua`.
+
+1. Add sound files to the mission folder, for example:
+   - `sounds/sonar_ping.ogg`
+   - `sounds/torpedo_launch.ogg`
+   - `sounds/warning_torpedo.ogg`
+2. In `asw_config.lua`, edit the `SOUND_CONFIG` table to point each event to the correct file and duration.
+   - Use the relative path exactly as in the mission folder, for example `sounds/torpedo_launch.ogg`.
+   - Set `duration` to the real length of the sound file in seconds.
+   - Set a config entry to `nil` to disable that sound.
+3. Make sure `soundScheduler.lua` is loaded before `asw_config.lua` in the mission load order.
+
+The sound scheduler registers sound names such as `torpedo_launch`, `torpedo_homing`, `buoy_splash`, `warning_torpedo`, and `warning_sonar`.
+
 ---
 
 ## Submarine Types
