@@ -49,6 +49,7 @@ function AISubmarineCommander:new(sub, config)
         torpedoes = config.torpedoes or {},
         detectableObjects = config.detectableObjects or {},
         dippingSonars = config.dippingSonars or {},
+        patrolMarks = {},
 
         -- Profile-specific settings
         attackSpeed = isAggressive and 8 or 4,
@@ -73,6 +74,7 @@ function AISubmarineCommander:new(sub, config)
 
     obj:shuffleWaypoints()
     obj:nextWaypoint()
+    obj:markPatrolPoints()
     obj:startPatrol()
     obj:startUpdateLoop()
 
@@ -110,6 +112,35 @@ function AISubmarineCommander:nextWaypoint()
     if zone then
         self.currentWaypoint = {x = zone.point.x, z = zone.point.z}
         debugMessage(self.sub.name .. " AI: heading to waypoint " .. zoneName)
+    end
+end
+
+local function nextAiMarkId()
+    if not _aiSubMarkIdCounter then _aiSubMarkIdCounter = 400000 end
+    _aiSubMarkIdCounter = _aiSubMarkIdCounter + 1
+    return _aiSubMarkIdCounter
+end
+
+function AISubmarineCommander:markPatrolPoints()
+    local coalitionId = self.sub.ownerCoalition or -1
+    local green = {0, 1, 0, 1}
+
+    for idx, zoneName in ipairs(self.waypointZones) do
+        local zone = trigger.misc.getZone(zoneName)
+        if zone then
+            local point = {x = zone.point.x, y = 0, z = zone.point.z}
+            local circleId = nextAiMarkId()
+            trigger.action.circleToAll(coalitionId, circleId, point, 150, green, {0, 1, 0, 0.3}, 1, true)
+
+            local textPoint = {x = zone.point.x + 200, y = 0, z = zone.point.z}
+            local textId = nextAiMarkId()
+            local label = "patrol point " .. zoneName
+            trigger.action.textToAll(coalitionId, textId, textPoint, green, {0, 0, 0, 0}, 12, true, label)
+
+            self.patrolMarks[#self.patrolMarks + 1] = {circleId = circleId, textId = textId}
+        else
+            debugMessage(self.sub.name .. " AI: patrol zone not found: " .. tostring(zoneName))
+        end
     end
 end
 
