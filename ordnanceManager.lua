@@ -267,6 +267,7 @@ function OrdnanceManager:launchBuoy(groupName)
         if ASW_SOUND then
             ASW_SOUND:playOnce(groupName, "buoy_splash")
             local enemyCoalition = self.ownerCoalition == coalition.side.BLUE and coalition.side.RED or coalition.side.BLUE
+            ASW_SOUND:playForCoalition(self.ownerCoalition, "buoy_splash")
             ASW_SOUND:playForCoalition(enemyCoalition, "buoy_splash")
         end
     end
@@ -339,6 +340,7 @@ function OrdnanceManager:recoverBuoy(groupName)
     if ASW_SOUND then
         ASW_SOUND:playOnce(groupName, "recover_splash")
         local enemyCoalition = self.ownerCoalition == coalition.side.BLUE and coalition.side.RED or coalition.side.BLUE
+        ASW_SOUND:playForCoalition(self.ownerCoalition, "recover_splash")
         ASW_SOUND:playForCoalition(enemyCoalition, "recover_splash")
     end
 
@@ -416,6 +418,7 @@ function OrdnanceManager:launchTorpedo(groupName)
         if ASW_SOUND then
             ASW_SOUND:playOnce(groupName, "torpedo_launch")
             local enemyCoalition = self.ownerCoalition == coalition.side.BLUE and coalition.side.RED or coalition.side.BLUE
+            ASW_SOUND:playForCoalition(self.ownerCoalition, "torpedo_launch")
             ASW_SOUND:playForCoalition(enemyCoalition, "warning_torpedo")
         end
     end

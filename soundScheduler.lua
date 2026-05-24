@@ -29,8 +29,11 @@ end
 -- duration: length of the sound in seconds (must be known)
 -- priority: number (use SoundScheduler.PRIORITY constants)
 function SoundScheduler:register(name, soundFile, duration, priority)
+    -- Use the provided soundFile path exactly as given. Caller is responsible
+    -- for providing the correct path (e.g. "sounds/foo.ogg" or
+    -- "l10n/DEFAULT/foo.ogg").
     self.sounds[name] = {
-        file     = "l10n/DEFAULT/" .. soundFile,
+        file     = soundFile,
         duration = duration,
         priority = priority or SoundScheduler.PRIORITY.NORMAL,
     }
@@ -44,6 +47,9 @@ function SoundScheduler:playOnce(groupName, soundName)
 
     local dcsGroup = Group.getByName(groupName)
     if not dcsGroup or not dcsGroup:isExist() then return false end
+
+    -- Debug log: record attempt to play sound for group
+    env.info(string.format("SoundScheduler: playOnce request: group='%s' sound='%s' file='%s'", tostring(groupName), tostring(soundName), tostring(sound.file)), false)
 
     local now = timer.getTime()
     local ch = self.channels[groupName]
@@ -61,6 +67,7 @@ function SoundScheduler:playOnce(groupName, soundName)
 
     -- Play the sound
     trigger.action.outSoundForGroup(dcsGroup:getID(), sound.file)
+    env.info(string.format("SoundScheduler: triggered outSoundForGroup id=%s file=%s", tostring(dcsGroup:getID()), tostring(sound.file)), false)
 
     -- Track when it ends
     local endTime = now + sound.duration
@@ -179,6 +186,8 @@ end
 function SoundScheduler:playForCoalition(coalitionId, soundName)
     local sound = self.sounds[soundName]
     if not sound then return false end
+    -- Debug log: record coalition playback
+    env.info(string.format("SoundScheduler: playForCoalition request: coalition=%s sound='%s' file='%s'", tostring(coalitionId), tostring(soundName), tostring(sound.file)), false)
     trigger.action.outSoundForCoalition(coalitionId, sound.file)
     return true
 end

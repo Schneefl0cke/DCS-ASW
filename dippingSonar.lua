@@ -182,6 +182,7 @@ function DippingSonar:startUpdateLoop()
                 if ASW_SOUND then
                     ASW_SOUND:playOnce(self.groupName, "sonar_splash")
                     local enemyCoalition = self.ownerCoalition == coalition.side.BLUE and coalition.side.RED or coalition.side.BLUE
+                    ASW_SOUND:playForCoalition(self.ownerCoalition, "sonar_splash")
                     ASW_SOUND:playForCoalition(enemyCoalition, "sonar_splash")
                 end
             else
@@ -242,6 +243,7 @@ function DippingSonar:ping(unit)
     -- Sonar ping sound (hunter group + warning to enemy coalition)
     if ASW_SOUND then
         ASW_SOUND:playOnce(self.groupName, "sonar_ping")
+        ASW_SOUND:playForCoalition(self.ownerCoalition, "sonar_ping")
     end
 
     -- Alert enemy coalition about active sonar ping with position
