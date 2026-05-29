@@ -106,6 +106,14 @@ local PLANE_CONFIG = {
     maxAltitude     = 200,                          -- Higher altitude limit for fixed-wing
     maxSpeed        = 120,                          -- Higher speed limit for fixed-wing (m/s)
     detectInterval  = 5,
+    madConfig       = {
+        detectionRange  = 500,   -- Horizontal detection radius at optimal altitude (meters)
+        maxSearchDepth  = 200,   -- Deepest available search depth setting (meters)
+        maxAltitude     = 150,   -- Max AGL for MAD operation (meters)
+        drainBase       = 0.4,   -- Charge drain %/sec at minimum depth
+        drainPerMeter   = 0.004, -- Additional drain %/sec per meter of search depth
+        rechargeRate    = 0.25,  -- Charge recovery %/sec when inactive
+    },
 }
 
 -- =============================================================================
@@ -210,6 +218,7 @@ local planeManager = PlaneHunterManager:new({
     detectInterval    = PLANE_CONFIG.detectInterval,
     buoys             = sharedBuoys,
     torpedoes         = sharedTorpedoes,
+    madConfig         = PLANE_CONFIG.madConfig,
 })
 
 -- Single detection loop covering all buoys from both manager types

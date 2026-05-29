@@ -102,6 +102,9 @@ function OrdnanceManager:cleanupDestroyedGroups()
                 end
             end
         end
+        if data and data.madDetector then
+            data.madDetector:stopUpdateLoop()
+        end
         self.groupData[groupName] = nil
         self.trackedGroups[groupName] = nil
         debugMessage("ASW Hunter group destroyed, cleaned up: " .. groupName)
@@ -399,6 +402,9 @@ function OrdnanceManager:showStatus(groupName)
     if data.dippingSonar then
         msg = msg .. "\nDipping sonar: " .. (data.dippingSonar.operational and data.dippingSonar.state or "BROKEN")
     end
+    if data.madDetector then
+        msg = msg .. "\n" .. data.madDetector:getStatusText()
+    end
 
     self:messageToGroup(groupName, msg, 10)
 end
@@ -447,15 +453,19 @@ function OrdnanceManager:rearmAll(groupName)
     data.inventory = self.maxBuoys
     data.torpedoInventory = self.maxTorpedoes
 
-    local sonarStatus = ""
+    local extras = ""
     if data.dippingSonar and not data.dippingSonar.operational then
         data.dippingSonar:repair()
-        sonarStatus = " | Dipping sonar: REPAIRED"
+        extras = extras .. " | Dipping sonar: REPAIRED"
+    end
+    if data.madDetector then
+        data.madDetector.charge = 100
+        extras = extras .. " | MAD: recharged"
     end
 
     self:messageToGroup(groupName, string.format(
         "Rearmed! Buoys: %d/%d | Torpedoes: %d/%d%s",
-        data.inventory, self.maxBuoys, data.torpedoInventory, self.maxTorpedoes, sonarStatus), 5)
+        data.inventory, self.maxBuoys, data.torpedoInventory, self.maxTorpedoes, extras), 5)
 end
 
 -- ===== PREPARE MODE HUD =====

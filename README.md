@@ -18,13 +18,14 @@ Load scripts in this order in the DCS Mission Editor (DO ONCE triggers):
 4. `anti_submarine_torpedo.lua`
 5. `submarineTorpedo.lua`
 6. `dippingSonar.lua`
-7. `soundScheduler.lua`
-8. `ordnanceManager.lua`
-9. `helicopterHunterManager.lua`
-10. `planeHunterManager.lua`
-11. `humanSubmarineCommander.lua`
-12. `aiSubmarineCommander.lua`
-13. `asw_config.lua`
+7. `madDetector.lua`
+8. `soundScheduler.lua`
+9. `ordnanceManager.lua`
+10. `helicopterHunterManager.lua`
+11. `planeHunterManager.lua`
+12. `humanSubmarineCommander.lua`
+13. `aiSubmarineCommander.lua`
+14. `asw_config.lua`
 
 ## Mission Editor Setup
 
@@ -184,13 +185,38 @@ Dipping sonar specifications:
 - Detection formula is the same as buoys but with 0.25 scale factor instead of 0.15
 - Sonar is repaired when rearming at the rearm zone or carrier
 
+#### MAD Detector *(fixed-wing only)*
+
+Magnetic Anomaly Detector — senses distortions in Earth's magnetic field caused by a submarine's steel hull. Close-range precision tool: use sonobuoys to cue the area first, then overfly for a MAD confirmation before torpedo delivery.
+
+| Command | Description |
+|---|---|
+| **Activate MAD** | Start scanning. Charge begins draining. |
+| **Deactivate MAD** | Stop scanning. Charge begins recharging. |
+| **Set Search Depth** | Choose sensitivity/depth: 50m, 100m, 150m, 200m. Deeper = faster drain. |
+| **MAD Status** | Show state, charge %, drain rate, and time remaining. |
+
+MAD specifications:
+- Detection range: **500m horizontal** at 50m AGL, scales down with altitude (inverse cube law)
+- Operating altitude: max **150m AGL** — above this the signal is too weak
+- Does **not detect noise makers** — ferrous steel hulls only
+- Detects subs shallower than the configured search depth (probability drops off toward that limit)
+- Contact markers shown in **orange** on the F10 map (30 second duration), visible to ASW coalition only
+- Contact shows horizontal position only — **depth is unknown** from MAD
+- **Charge system**: represents continuous power draw and sensor heating
+  - Drains while active; recharges while inactive
+  - Drain rate: `0.4 + searchDepth × 0.004` %/sec (e.g. 0.8%/s at 100m → ~125s of use)
+  - Recharge: 0.25%/sec → ~400s for full recharge from empty
+  - Auto-deactivates at 0% charge; fully recharged at rearm zone
+- Submarine side receives a vague warning when swept
+
 #### General
 
 | Command | Description |
 |---|---|
 | **Cancel** | Cancel current prepare operation |
-| **Status** | Show buoy/torpedo inventory, active counts, current state |
-| **Rearm** | Restock buoys and torpedoes. Must be near the rearm zone or carrier. |
+| **Status** | Show buoy/torpedo inventory, active counts, MAD state, current state |
+| **Rearm** | Restock buoys and torpedoes, repair dipping sonar, recharge MAD. Must be near the rearm zone or carrier. |
 
 ---
 
@@ -465,6 +491,7 @@ PLANE_CONFIG = {
 | `anti_submarine_torpedo.lua` | `AntiSubmarineTorpedo` | Player-launched ASW torpedo with active homing sonar |
 | `submarineTorpedo.lua` | `SubmarineTorpedo` | Submarine-launched anti-ship torpedo with cone sonar |
 | `dippingSonar.lua` | `DippingSonar` | Active dipping sonar deployed from hovering helicopter |
+| `madDetector.lua` | `MADDetector` | Magnetic Anomaly Detector for fixed-wing; charge-limited, altitude-dependent |
 | `soundScheduler.lua` | `SoundScheduler` | Priority-based sound playback scheduler per group |
 | `ordnanceManager.lua` | `OrdnanceManager` | Base class: buoy deploy, torpedo launch, inventory, rearm, F10 menus |
 | `helicopterHunterManager.lua` | `HelicopterHunterManager` | Extends base with dipping sonar and buoy recovery |
