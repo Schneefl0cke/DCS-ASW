@@ -18,11 +18,15 @@ Load scripts in this order in the DCS Mission Editor (DO ONCE triggers):
 4. `anti_submarine_torpedo.lua`
 5. `submarineTorpedo.lua`
 6. `dippingSonar.lua`
-7. `soundScheduler.lua`
-8. `ordnanceManager.lua`
-9. `humanSubmarineCommander.lua`
-10. `aiSubmarineCommander.lua`
-11. `asw_config.lua`
+7. `depthCharge.lua`
+8. `madDetector.lua`
+9. `soundScheduler.lua`
+10. `ordnanceManager.lua`
+11. `helicopterHunterManager.lua`
+12. `planeHunterManager.lua`
+13. `humanSubmarineCommander.lua`
+14. `aiSubmarineCommander.lua`
+15. `asw_config.lua`
 
 ## Mission Editor Setup
 
@@ -31,7 +35,7 @@ Load scripts in this order in the DCS Mission Editor (DO ONCE triggers):
 | Zone Name | Purpose |
 |---|---|
 | `Submarine_initial_position` | Spawn location for the submarine (configurable in `asw_config.lua`) |
-| `ASW_Hunter_Rearming` | Circle zone where ASW aircraft land/hover to rearm (not needed if using `rearmUnits`) |
+| `ASW_Hunter_Rearming` | Circle zone where ASW aircraft land/hover to rearm. Used alongside `rearmUnits` — both are checked. |
 | `patrol_1`, `patrol_2`, ... | Patrol waypoints for AI submarine commander (only needed if using AI) |
 
 ### Required Groups
@@ -114,19 +118,25 @@ When destroyed, a **red circle with text** is placed at the sunk position, visib
 
 ## ASW Hunter Side (BLUE)
 
+Hunters are split into two types with separate group name prefixes:
+
+| Type | Prefix | Buoys | Torpedo | Dipping Sonar | Buoy Recovery |
+|---|---|---|---|---|---|
+| Helicopter | `_asw_helo` | Yes | Yes | Yes | Yes |
+| Fixed-wing | `_asw_plane` | Yes | Yes | No | No |
+
 ### F10 Menu: ASW Operations
 
-Available under the group radio menu for any aircraft group with `_asw_hunter` in its name.
-
-#### Sonarbuoys
+#### Sonarbuoys (both types)
 
 | Command | Description |
 |---|---|
 | **Prepare to Launch Buoy** | Enter launch mode. HUD shows altitude/speed readiness. |
-| **Launch Buoy!** | Deploy a sonarbuoy at current position. Requires: Alt < 50m AGL, Speed < 60 m/s. |
-| **Prepare to Recover Buoy** | Enter recovery mode. HUD shows nearest buoy distance. |
-| **Recover Buoy!** | Pick up nearest buoy within 10m. Returns it to inventory. |
+| **Launch Buoy!** | Deploy a sonarbuoy at current position. |
+| **Prepare to Recover Buoy** | *(Helicopters only)* Enter recovery mode. HUD shows nearest buoy distance. |
+| **Recover Buoy!** | *(Helicopters only)* Pick up nearest buoy within 10m. Returns it to inventory. |
 
+- Helicopters carry **4 buoys** by default; fixed-wing carry **8**
 - Each hunter carries **4 buoys** (configurable)
 - Buoys detect submarines every 5 seconds using a probability-based model
 - Detection probability depends on: submarine noise (speed × noise factor), distance, depth, and thermal layer
@@ -176,13 +186,61 @@ Dipping sonar specifications:
 - Detection formula is the same as buoys but with 0.25 scale factor instead of 0.15
 - Sonar is repaired when rearming at the rearm zone or carrier
 
+#### Depth Charges *(helicopters and planes)*
+
+Area-effect weapon. No homing — requires a positional fix first. Drops a pattern of charges along the aircraft's current heading; each sinks to the set depth and detonates. Charges that spawn over land are discarded silently.
+
+| Command | Description |
+|---|---|
+| **Set Detonation Depth** | 25m, 50m, 100m, 150m, 200m, 300m |
+| **Set Count** | 1, 2, 4, 6, or 8 charges per drop |
+| **Set Spacing** | 100m, 200m, 400m, or 600m between charges |
+| **Prepare to Drop** | Enter drop mode. HUD shows heading, pattern, and flight params. |
+| **Drop!** | Release the pattern along current heading. |
+
+Depth charge specifications:
+- Sink rate: **3 m/s** (50m depth → ~17s, 200m → ~67s)
+- Kill radius: **80m** (3D distance from detonation point)
+- Pattern extends **forward** from the drop point along the aircraft's heading
+- Charges over land are discarded with a log message — no explosion
+- Drop altitude/speed limits are more relaxed than buoys (configured separately per hunter type)
+- Helicopter default: **4 charges** | Alt < 150m AGL | Speed < ~155 kt
+- Fixed-wing default: **16 charges** | Alt < 500m AGL | Speed < ~389 kt
+- Submarine coalition receives **"Depth charges in the water!"** warning (uses torpedo warning sound)
+- Restocked at rearm zone
+
+#### MAD Detector *(fixed-wing only)*
+
+Magnetic Anomaly Detector — senses distortions in Earth's magnetic field caused by a submarine's steel hull. Close-range precision tool: use sonobuoys to cue the area first, then overfly for a MAD confirmation before torpedo delivery.
+
+| Command | Description |
+|---|---|
+| **Activate MAD** | Start scanning. Charge begins draining. |
+| **Deactivate MAD** | Stop scanning. Charge begins recharging. |
+| **Set Search Depth** | Choose sensitivity/depth: 50m, 100m, 150m, 200m. Deeper = faster drain. |
+| **MAD Status** | Show state, charge %, drain rate, and time remaining. |
+
+MAD specifications:
+- Detection range: **500m horizontal** at 50m AGL, scales down with altitude (inverse cube law)
+- Operating altitude: max **150m AGL** — above this the signal is too weak
+- Does **not detect noise makers** — ferrous steel hulls only
+- Detects subs shallower than the configured search depth (probability drops off toward that limit)
+- Contact markers shown in **orange** on the F10 map (30 second duration), visible to ASW coalition only
+- Contact shows horizontal position only — **depth is unknown** from MAD
+- **Charge system**: represents continuous power draw and sensor heating
+  - Drains while active; recharges while inactive
+  - Drain rate: `0.4 + searchDepth × 0.004` %/sec (e.g. 0.8%/s at 100m → ~125s of use)
+  - Recharge: 0.25%/sec → ~400s for full recharge from empty
+  - Auto-deactivates at 0% charge; fully recharged at rearm zone
+- Submarine side receives a vague warning when swept
+
 #### General
 
 | Command | Description |
 |---|---|
 | **Cancel** | Cancel current prepare operation |
-| **Status** | Show buoy/torpedo inventory, active counts, current state |
-| **Rearm** | Restock buoys and torpedoes. Must be near the rearm zone or carrier. |
+| **Status** | Show buoy/torpedo inventory, active counts, MAD state, current state |
+| **Rearm** | Restock buoys and torpedoes, repair dipping sonar, recharge MAD. Must be near a `rearmUnit` carrier **or** inside the `rearmZone` — both are valid. |
 
 ---
 
@@ -419,16 +477,28 @@ AI_CONFIG = {
 }
 
 -- 5. ASW Hunters
-HUNTER_CONFIG = {
-    prefix          = "_asw_hunter",
+HELO_CONFIG = {
+    prefix          = "_asw_helo",      -- group name prefix for helicopters
     rearmZone       = "ASW_Hunter_Rearming",
-    rearmUnits      = {},               -- carrier unit names (e.g. {"CVN-74", "CVN-75"})
+    rearmUnits      = {},               -- carrier unit names (e.g. {"CVN-74", "CVN-75"}); checked alongside rearmZone
     rearmRadius     = 500,
     maxBuoys        = 4,
-    maxTorpedoes    = 1,
-    maxAltitude     = 50,
-    maxSpeed        = 60,
-    recoveryRange   = 200,
+    maxTorpedoes    = 2,
+    maxAltitude     = 50,               -- meters AGL
+    maxSpeed        = 60,               -- m/s
+    recoveryRange   = 10,
+    detectInterval  = 5,
+}
+
+PLANE_CONFIG = {
+    prefix          = "_asw_plane",     -- group name prefix for fixed-wing
+    rearmZone       = "ASW_Hunter_Rearming",
+    rearmUnits      = {},
+    rearmRadius     = 500,
+    maxBuoys        = 8,
+    maxTorpedoes    = 2,
+    maxAltitude     = 200,              -- meters AGL
+    maxSpeed        = 120,              -- m/s
     detectInterval  = 5,
 }
 ```
@@ -445,8 +515,12 @@ HUNTER_CONFIG = {
 | `anti_submarine_torpedo.lua` | `AntiSubmarineTorpedo` | Player-launched ASW torpedo with active homing sonar |
 | `submarineTorpedo.lua` | `SubmarineTorpedo` | Submarine-launched anti-ship torpedo with cone sonar |
 | `dippingSonar.lua` | `DippingSonar` | Active dipping sonar deployed from hovering helicopter |
+| `depthCharge.lua` | `DepthCharge` | Single depth charge: land-check on spawn, sinks to set depth, 80m kill radius |
+| `madDetector.lua` | `MADDetector` | Magnetic Anomaly Detector for fixed-wing; charge-limited, altitude-dependent |
 | `soundScheduler.lua` | `SoundScheduler` | Priority-based sound playback scheduler per group |
-| `ordnanceManager.lua` | `OrdnanceManager` | Manages hunter group menus, inventory, buoy/torpedo/sonar operations |
+| `ordnanceManager.lua` | `OrdnanceManager` | Base class: buoy deploy, torpedo launch, inventory, rearm, F10 menus |
+| `helicopterHunterManager.lua` | `HelicopterHunterManager` | Extends base with dipping sonar and buoy recovery |
+| `planeHunterManager.lua` | `PlaneHunterManager` | Extends base with fixed-wing altitude/speed limits; no dipping sonar |
 | `humanSubmarineCommander.lua` | `HumanSubmarineCommander` | F10 menus for human submarine control |
 | `aiSubmarineCommander.lua` | `AISubmarineCommander` | Autonomous submarine AI with patrol/attack/evade states |
 | `asw_config.lua` | — | Main entry point, configuration, wiring |
