@@ -117,6 +117,13 @@ function AntiSubmarineTorpedo:startUpdateLoop()
         -- Move forward on current heading
         self:move(dt)
 
+        -- Destroy torpedo if it runs aground
+        if self:getWaterDepth() <= 0 then
+            log(self.name .. " ran aground and was destroyed.", self.ownerCoalition)
+            self:expire()
+            return
+        end
+
         -- Update map marker
         self:updateMarker()
 
@@ -130,6 +137,12 @@ function AntiSubmarineTorpedo:startUpdateLoop()
     end
 
     update()
+end
+
+function AntiSubmarineTorpedo:getWaterDepth()
+    local _, depth = land.getSurfaceHeightWithSeabed({x = self.x, y = self.z})
+    debugMessage("Depth at point: "..depth, 5)
+    return math.max(0, depth)
 end
 
 -- Move the torpedo forward
