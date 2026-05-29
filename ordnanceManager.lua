@@ -213,6 +213,12 @@ function OrdnanceManager:checkFlightParams(unit)
     return altOk and spdOk, msg
 end
 
+-- Check if a position is over water (not land)
+function OrdnanceManager:isPositionOverWater(x, z)
+    local _, waterDepth = land.getSurfaceHeightWithSeabed({x = x, y = z})
+    return waterDepth > 0
+end
+
 -- ===== PREPARE TO LAUNCH BUOY =====
 function OrdnanceManager:prepareToLaunch(groupName)
     local data = self.groupData[groupName]
@@ -252,10 +258,16 @@ function OrdnanceManager:launchBuoy(groupName)
         return
     end
 
+    -- Check if over water
+    local pos = unit:getPoint()
+    if not self:isPositionOverWater(pos.x, pos.z) then
+        self:messageToGroup(groupName, "Cannot launch! You are over land, buoys must be deployed over water!", 5)
+        return
+    end
+
     -- Deploy the buoy
     self.buoyIdCounter = self.buoyIdCounter + 1
     local buoyName = groupName .. "-Buoy-" .. self.buoyIdCounter
-    local pos = unit:getPoint()
     local buoy = Sonarbuoy:new(buoyName, pos.x, pos.z, self.ownerCoalition, nil, self.thermalLayerDepth)
 
     if buoy then
@@ -577,6 +589,14 @@ function OrdnanceManager:startPrepareMessages(groupName)
         if not unit then return end
 
         local _, msg = self:checkFlightParams(unit)
+
+        -- For launch mode, check if over water
+        if d.state == "preparing_launch" then
+            local pos = unit:getPoint()
+            local overWater = self:isPositionOverWater(pos.x, pos.z)
+            local waterStatus = overWater and "WATER OK" or "LAND - NO DEPLOY"
+            msg = msg .. "\n" .. waterStatus
+        end
 
         -- For recover mode, also show distance to nearest buoy
         if d.state == "preparing_recover" then
