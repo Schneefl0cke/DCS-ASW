@@ -141,7 +141,7 @@ function Sonarbuoy:detect(submarines)
             if contact then
                 contacts[#contacts + 1] = contact
                 self:markContact(contact)
-                log(self.name .. " detected contact! Confidence: " .. string.format("%.0f", contact.confidence * 100) .. "%", self.ownerCoalition)
+                log(self.name .. " bearing contact! BRG " .. string.format("%.0f", math.deg(contact.bearing) % 360) .. "° | Conf: " .. string.format("%.0f", contact.confidence * 100) .. "%", self.ownerCoalition)
             end
         end
     end
@@ -190,52 +190,58 @@ function Sonarbuoy:tryDetect(sub)
     -- Roll for detection
     if math.random() > probability then return nil end
 
-    -- Detection successful — compute estimated position with uncertainty
+    -- Detection successful — passive buoys give bearing only, not range or depth
     local confidence = probability
     local bearingTrue = math.atan2(dz, dx)
 
-    -- Bearing error: ±0 to ±30 degrees, worse at longer range
+    -- Bearing error: ±0 to ±30 degrees, worse at longer range and lower confidence
     local bearingErrorMax = math.rad(30) * (1 - confidence)
     local bearingError = (math.random() * 2 - 1) * bearingErrorMax
     local estimatedBearing = bearingTrue + bearingError
 
-    -- Range error: ±0 to ±25% of true range, worse at longer range
-    local rangeErrorMax = distance * 0.25 * (1 - confidence)
-    local rangeError = (math.random() * 2 - 1) * rangeErrorMax
-    local estimatedRange = math.max(0, distance + rangeError)
-
-    local estimatedX = self.x + estimatedRange * math.cos(estimatedBearing)
-    local estimatedZ = self.z + estimatedRange * math.sin(estimatedBearing)
-
-    -- Depth error: ±0 to ±30% of true depth, worse at longer range
-    local depthErrorMax = sub.depth * 0.30 * (1 - confidence)
-    local depthError = (math.random() * 2 - 1) * depthErrorMax
-    local estimatedDepth = math.max(0, sub.depth + depthError)
-
     return {
-        x = estimatedX,
-        z = estimatedZ,
-        depth = estimatedDepth,
+        bearing    = estimatedBearing,
         confidence = confidence,
-        subName = sub.name,
-        buoyName = self.name
+        subName    = sub.name,
+        buoyName   = self.name
     }
 end
 
--- Place a marker at the estimated contact position, auto-removed after 30 seconds
+-- Draw a bearing line from the buoy outward, auto-removed after 30 seconds.
+-- Passive buoys give bearing only — the sub is somewhere along this line.
 function Sonarbuoy:markContact(contact)
-    local coord = COORDINATE:New(contact.x, 0, contact.z)
-    local text = self.name .. " | CONTACT | Confidence: " .. string.format("%.0f", contact.confidence * 100) .. "%" .. " | Est. Depth: " .. string.format("%.0f", contact.depth) .. "m"
-    local marker = MARKER:New(coord, text):ReadOnly():ToCoalition(self.ownerCoalition)
-    self.contactMarkers[#self.contactMarkers + 1] = marker
+    local lineLength = self.maxDetectionRange
+    local endPt = {
+        x = self.x + lineLength * math.cos(contact.bearing),
+        y = 0,
+        z = self.z + lineLength * math.sin(contact.bearing),
+    }
+    local startPt = {x = self.x, y = 0, z = self.z}
+
+    local yellow = {1, 1, 0, 1}
+    local lineId = nextBuoyMarkId()
+    local textId = nextBuoyMarkId()
+
+    trigger.action.lineToAll(self.ownerCoalition, lineId, startPt, endPt, yellow, 2, true)
+
+    -- Label at 25% along the line
+    local labelPt = {
+        x = self.x + lineLength * 0.25 * math.cos(contact.bearing),
+        y = 0,
+        z = self.z + lineLength * 0.25 * math.sin(contact.bearing),
+    }
+    trigger.action.textToAll(self.ownerCoalition, textId, labelPt, yellow, {0, 0, 0, 0}, 10, true,
+        string.format("%s | BRG %.0f° | Conf: %.0f%%",
+            self.name, math.deg(contact.bearing) % 360, contact.confidence * 100))
+
+    local m = {lineId = lineId, textId = textId}
+    self.contactMarkers[#self.contactMarkers + 1] = m
 
     timer.scheduleFunction(function()
-        marker:Remove()
-        for i, m in ipairs(self.contactMarkers) do
-            if m == marker then
-                table.remove(self.contactMarkers, i)
-                break
-            end
+        trigger.action.removeMark(lineId)
+        trigger.action.removeMark(textId)
+        for i, cm in ipairs(self.contactMarkers) do
+            if cm == m then table.remove(self.contactMarkers, i) break end
         end
     end, nil, timer.getTime() + 30)
 end
@@ -243,7 +249,8 @@ end
 -- Remove all contact markers
 function Sonarbuoy:clearContactMarkers()
     for _, m in ipairs(self.contactMarkers) do
-        m:Remove()
+        trigger.action.removeMark(m.lineId)
+        trigger.action.removeMark(m.textId)
     end
     self.contactMarkers = {}
 end

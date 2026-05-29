@@ -111,6 +111,9 @@ The submarine's own coalition sees a **blue trail** (last 3 segments) with a **h
 ### Sonarbuoy Position
 Sonarbuoys are shown as a **small blue circle** with the buoy name, visible to all coalitions.
 
+### Sonarbuoy Contact
+A **yellow bearing line** is drawn from the buoy outward to max detection range, labelled with bearing and confidence. Passive buoys give **bearing only** — the submarine is somewhere along that line. Cross two or more bearing lines from different buoys to triangulate a position fix. Lines auto-expire after 30 seconds.
+
 ### Submarine Sunk
 When destroyed, a **red circle with text** is placed at the sunk position, visible to all coalitions.
 
@@ -140,7 +143,8 @@ Hunters are split into two types with separate group name prefixes:
 - Each hunter carries **4 buoys** (configurable)
 - Buoys detect submarines every 5 seconds using a probability-based model
 - Detection probability depends on: submarine noise (speed × noise factor), distance, depth, and thermal layer
-- Contact markers appear on the F10 map for 30 seconds with estimated position, depth, and confidence percentage
+- On detection, a **yellow bearing line** is drawn from the buoy outward (30 second duration). Bearing has ±0–30° error scaled by confidence. No range or depth — passive buoys hear direction only.
+- Triangulate by cross-referencing bearing lines from two or more buoys
 - Buoy position is marked with a blue circle **visible to both coalitions** — the submarine side can see where buoys are deployed
 - The submarine coalition receives a **warning message** when a buoy is deployed
 
@@ -370,7 +374,7 @@ local AI_CONFIG = {
 
 ## Detection Model
 
-All sonar detection (buoys, ASW torpedoes, submarine passive sonar) uses a probability-based model:
+All sonar detection uses a probability-based model. **Passive sonobuoys give bearing only** (no range, no depth) — cross-referencing two or more bearing lines is required to fix a position. Active sensors (dipping sonar, ASW torpedoes) give full position estimates.
 
 ### Buoy Detection Formula
 
@@ -410,9 +414,10 @@ probability = effectiveNoise × depthPenalty × thermalPenalty × distanceFactor
 
 ### Common Detection Properties
 
-- Clamped to [0, 0.95]
+- Probability clamped to [0, 0.95]
 - A stationary or very slow sub (effectiveNoise < 0.1) is undetectable
-- On successful detection, position is estimated with bearing error (±30°) and range error (±25%), both scaled by confidence
+- **Sonobuoys**: bearing only (±0–30° error scaled by confidence). No range, no depth.
+- **Dipping sonar**: full position estimate with bearing error (±30°), range error (±25%), depth error (±30%), all scaled by confidence
 
 ### Submarine Torpedo Ship Detection
 
