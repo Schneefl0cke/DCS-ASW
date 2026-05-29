@@ -116,6 +116,21 @@ end
 -- Builds buoy deploy + torpedo + general menus, and stores handles in
 -- data.menus so subclasses can extend them after calling this.
 function OrdnanceManager:initGroup(groupName)
+    if self.trackedGroups[groupName] then
+        self:log("ASW: Group '" .. groupName .. "' is already registered — ignoring duplicate init.")
+        return
+    end
+
+    local dcsGroup = Group.getByName(groupName)
+    if dcsGroup then
+        local units = dcsGroup:getUnits()
+        if units and #units > 1 then
+            self.trackedGroups[groupName] = true
+            self:log("ASW: Group '" .. groupName .. "' has " .. #units .. " units. Hunter groups must have exactly 1 unit — skipping.")
+            return
+        end
+    end
+
     self.trackedGroups[groupName] = true
     self.groupData[groupName] = {
         inventory         = self.maxBuoys,
@@ -153,6 +168,10 @@ function OrdnanceManager:initGroup(groupName)
     MENU_GROUP_COMMAND:New(mooseGroup, "Cancel", rootMenu, self.cancelPrepare, self, groupName)
     MENU_GROUP_COMMAND:New(mooseGroup, "Status", rootMenu, self.showStatus, self, groupName)
     MENU_GROUP_COMMAND:New(mooseGroup, "Rearm", rootMenu, self.rearmAll, self, groupName)
+
+    local unit = self:getGroupUnit(groupName)
+    local typeName = unit and unit:getTypeName() or groupName
+    self:messageToGroup(groupName, "ASW hunter slot active: " .. typeName .. "\nUse F10 \226\134\146 ASW Operations to begin.", 15)
 
     debugMessage("ASW Hunter group registered: " .. groupName)
 end
