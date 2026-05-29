@@ -82,8 +82,8 @@ local AI_CONFIG = {
 
 local HELO_CONFIG = {
     prefix          = "_asw_helo",                  -- Group name prefix for helicopters
-    rearmZone       = "ASW_Hunter_Rearming",        -- Trigger zone for rearming (static)
-    rearmUnits      = {},                           -- Carrier unit names (e.g. {"CVN-74", "CVN-75"}), overrides rearmZone
+    rearmZone       = "ASW_Hunter_Rearming",        -- Trigger zone for rearming (static); checked alongside rearmUnits
+    rearmUnits      = {},                           -- Carrier unit names (e.g. {"CVN-74", "CVN-75"}); checked alongside rearmZone
     rearmRadius     = 500,                          -- Meters around each rearmUnit
     maxBuoys        = 4,                            -- Sonarbuoys per hunter
     maxTorpedoes    = 2,                            -- ASW torpedoes per hunter
@@ -98,9 +98,9 @@ local HELO_CONFIG = {
 
 local PLANE_CONFIG = {
     prefix          = "_asw_plane",                 -- Group name prefix for fixed-wing
-    rearmZone       = "ASW_Hunter_Rearming",        -- Can share the same rearm zone
-    rearmUnits      = {},
-    rearmRadius     = 500,
+    rearmZone       = "ASW_Hunter_Rearming",        -- Trigger zone for rearming; checked alongside rearmUnits
+    rearmUnits      = {},                           -- Carrier unit names (e.g. {"CVN-74", "CVN-75"}); checked alongside rearmZone
+    rearmRadius     = 500,                          -- Meters around each rearmUnit
     maxBuoys        = 8,                            -- Planes carry more buoys
     maxTorpedoes    = 2,
     maxAltitude     = 200,                          -- Higher altitude limit for fixed-wing

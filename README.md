@@ -34,7 +34,7 @@ Load scripts in this order in the DCS Mission Editor (DO ONCE triggers):
 | Zone Name | Purpose |
 |---|---|
 | `Submarine_initial_position` | Spawn location for the submarine (configurable in `asw_config.lua`) |
-| `ASW_Hunter_Rearming` | Circle zone where ASW aircraft land/hover to rearm (not needed if using `rearmUnits`) |
+| `ASW_Hunter_Rearming` | Circle zone where ASW aircraft land/hover to rearm. Used alongside `rearmUnits` — both are checked. |
 | `patrol_1`, `patrol_2`, ... | Patrol waypoints for AI submarine commander (only needed if using AI) |
 
 ### Required Groups
@@ -216,7 +216,7 @@ MAD specifications:
 |---|---|
 | **Cancel** | Cancel current prepare operation |
 | **Status** | Show buoy/torpedo inventory, active counts, MAD state, current state |
-| **Rearm** | Restock buoys and torpedoes, repair dipping sonar, recharge MAD. Must be near the rearm zone or carrier. |
+| **Rearm** | Restock buoys and torpedoes, repair dipping sonar, recharge MAD. Must be near a `rearmUnit` carrier **or** inside the `rearmZone` — both are valid. |
 
 ---
 
@@ -456,7 +456,7 @@ AI_CONFIG = {
 HELO_CONFIG = {
     prefix          = "_asw_helo",      -- group name prefix for helicopters
     rearmZone       = "ASW_Hunter_Rearming",
-    rearmUnits      = {},               -- carrier unit names (e.g. {"CVN-74", "CVN-75"})
+    rearmUnits      = {},               -- carrier unit names (e.g. {"CVN-74", "CVN-75"}); checked alongside rearmZone
     rearmRadius     = 500,
     maxBuoys        = 4,
     maxTorpedoes    = 2,

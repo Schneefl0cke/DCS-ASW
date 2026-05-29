@@ -419,30 +419,26 @@ function OrdnanceManager:rearmAll(groupName)
     local pos = unit:getPoint()
     local inRange = false
 
-    if self.rearmUnits and #self.rearmUnits > 0 then
-        for _, unitName in ipairs(self.rearmUnits) do
-            local rearmDcsUnit = Unit.getByName(unitName)
-            if rearmDcsUnit and rearmDcsUnit:isExist() then
-                local rPos = rearmDcsUnit:getPoint()
-                local dx = pos.x - rPos.x
-                local dz = pos.z - rPos.z
-                local dist = math.sqrt(dx * dx + dz * dz)
-                if dist <= self.rearmRadius then
-                    inRange = true
-                    break
-                end
+    for _, unitName in ipairs(self.rearmUnits) do
+        local rearmDcsUnit = Unit.getByName(unitName)
+        if rearmDcsUnit and rearmDcsUnit:isExist() then
+            local rPos = rearmDcsUnit:getPoint()
+            local dx = pos.x - rPos.x
+            local dz = pos.z - rPos.z
+            if math.sqrt(dx * dx + dz * dz) <= self.rearmRadius then
+                inRange = true
+                break
             end
         end
-    else
+    end
+
+    if not inRange then
         local zone = trigger.misc.getZone(self.rearmZone)
-        if not zone then
-            self:messageToGroup(groupName, "Rearm zone not configured!", 5)
-            return
+        if zone then
+            local dx = pos.x - zone.point.x
+            local dz = pos.z - zone.point.z
+            inRange = math.sqrt(dx * dx + dz * dz) <= zone.radius
         end
-        local dx = pos.x - zone.point.x
-        local dz = pos.z - zone.point.z
-        local dist = math.sqrt(dx * dx + dz * dz)
-        inRange = dist <= zone.radius
     end
 
     if not inRange then
