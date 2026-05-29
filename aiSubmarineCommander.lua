@@ -64,6 +64,7 @@ function AISubmarineCommander:new(sub, config)
         silentChance = isAggressive and 0.3 or 0.7,  -- chance of going full stop during evasion
 
         randomPatrol = config.randomPatrol ~= false,
+        enableAttack = config.enableAttack ~= false,
 
         -- State
         state = "patrol",      -- patrol, attack, evade
@@ -247,9 +248,11 @@ function AISubmarineCommander:updatePatrol(dt)
     end
 
     -- Check for ship targets via passive sonar
-    local target = self:findBestTarget()
-    if target then
-        self:startAttack(target)
+    if self.enableAttack then
+        local target = self:findBestTarget()
+        if target then
+            self:startAttack(target)
+        end
     end
 end
 
