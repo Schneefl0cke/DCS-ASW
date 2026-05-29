@@ -1,6 +1,5 @@
 # Planned Features
 
-- Depth Charges as weapon - possible for ships/planes/helicopters
 - Ships with specific unit names have ASDIC/Listening stations (Recommendation to put them in seperate groups)
 - Submarine can surface, has different top speed there. A real DCS model is shown.
 - Diesel submarines use Battery when submerged. On surface the Battery is recharched.
