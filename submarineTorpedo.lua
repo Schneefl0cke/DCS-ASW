@@ -122,7 +122,7 @@ function SubmarineTorpedo:startUpdateLoop()
         -- Battery check
         local remaining = self.batteryLife - self.elapsedTime
         if remaining <= 0 then
-            self:expire()
+            self:expire(true)
             return
         end
 
@@ -144,6 +144,13 @@ function SubmarineTorpedo:startUpdateLoop()
         -- Move forward
         self:move(dt)
 
+        -- Destroy torpedo if it runs aground
+        if self:getWaterDepth() <= 0 then
+            log(self.name .. " ran aground and was destroyed.", self.ownerCoalition)
+            self:expire(false)
+            return
+        end
+
         -- Update map marker (visible to all)
         self:updateMarker()
 
@@ -157,6 +164,12 @@ function SubmarineTorpedo:startUpdateLoop()
     end
 
     update()
+end
+
+function SubmarineTorpedo:getWaterDepth()
+    local _, depth = land.getSurfaceHeightWithSeabed({x = self.x, y = self.z})
+    debugMessage("Depth at point: "..depth, 5)
+    return math.max(0, depth)
 end
 
 -- Move the torpedo forward
@@ -332,12 +345,14 @@ function SubmarineTorpedo:hitTarget(unit)
     self.impactMarker = MARKER:New(coord, text):ReadOnly():ToAll()
 end
 
--- Battery expired
-function SubmarineTorpedo:expire()
+-- Battery expired or torpedo destroyed
+function SubmarineTorpedo:expire(isBatteryExpired)
     self.active = false
     self:stopUpdateLoop()
     self:clearMarker()
-    log(self.name .. " battery depleted. Torpedo lost.", self.ownerCoalition)
+    if isBatteryExpired then
+        log(self.name .. " battery depleted. Torpedo lost.", self.ownerCoalition)
+    end
 end
 
 -- Remove torpedo

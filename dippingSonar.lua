@@ -86,6 +86,15 @@ function DippingSonar:adjustCable(delta)
     self.targetCableLength = math.max(0, math.min(self.targetCableLength + delta, self.maxCableLength))
 end
 
+-- Get water (seabed) depth at the helicopter's current position
+function DippingSonar:getSeabedDepth(unit)
+    unit = unit or self:getUnit()
+    if not unit then return 0 end
+    local pos = unit:getPoint()
+    local _, depth = land.getSurfaceHeightWithSeabed({x = pos.x, y = pos.z})
+    return math.max(0, depth)
+end
+
 -- Get actual sonar depth in water = cable length - AGL (clamped >= 0)
 function DippingSonar:getWaterDepth(unit)
     unit = unit or self:getUnit()
@@ -98,6 +107,11 @@ end
 function DippingSonar:lower()
     if not self.operational then return false, "Dipping sonar is broken! Return to rearm." end
     if self.state ~= "stowed" then return false, "Sonar is already deployed!" end
+
+    local unit = self:getUnit()
+    if unit and self:getSeabedDepth(unit) <= 0 then
+        return false, "Cannot deploy dipping sonar over land!"
+    end
 
     self.state = "lowering"
     self.currentCableLength = 0
@@ -152,6 +166,7 @@ function DippingSonar:startUpdateLoop()
         -- Check speed and altitude limits
         local speed = self:getSpeed(unit)
         local agl = self:getAGL(unit)
+        local seabedDepth = self:getSeabedDepth(unit)
 
         -- Speed warnings and break
         if speed > self.maxSpeed then
@@ -167,6 +182,12 @@ function DippingSonar:startUpdateLoop()
             return
         elseif agl > self.warnAltitude then
             self:messageToGroup("WARNING: Altitude " .. string.format("%.0f", agl) .. "m AGL! Cable breaks at " .. self.maxAltitude .. "m!", 1)
+        end
+
+        -- Destroy sonar if helicopter flies over land while deployed
+        if seabedDepth <= 0 then
+            self:breakCable("Sonar destroyed! Helicopter flew over land!")
+            return
         end
 
         -- Update cable length
@@ -224,6 +245,13 @@ function DippingSonar:startUpdateLoop()
 
             -- Ping for submarines
             self:ping(unit)
+        end
+
+        -- Clamp cable if water is shallower than current sonar depth
+        local sonarWaterDepth = self.currentCableLength - agl
+        if sonarWaterDepth > seabedDepth then
+            self.currentCableLength = agl + seabedDepth
+            self:messageToGroup(string.format("WARNING: Water depth (%.0fm) shallower than sonar depth (%.0fm). Cable adjusted to %.0fm.", seabedDepth, sonarWaterDepth, self.currentCableLength), 3)
         end
 
         self.updateScheduleId = timer.scheduleFunction(function()

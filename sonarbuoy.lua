@@ -28,6 +28,12 @@ end
 -- maxDetectionRange: Maximum detection range in meters (default 15000)
 -- thermalLayerDepth: Depth of thermal layer in meters. Subs below this are harder to detect (default 90)
 function Sonarbuoy:new(name, x, z, ownerCoalition, maxDetectionRange, thermalLayerDepth)
+    local _, waterDepth = land.getSurfaceHeightWithSeabed({x = x, y = z})
+    if waterDepth <= 0 then
+        log("Sonarbuoy " .. name .. " deployment failed: position is over land!", ownerCoalition or coalition.side.BLUE)
+        return nil
+    end
+
     local obj = {
         name = name,
         x = x,

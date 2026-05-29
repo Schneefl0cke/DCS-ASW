@@ -38,11 +38,11 @@ local THERMAL_LAYER_DEPTH = 90  -- meters
 -- Spawn zone must exist as a trigger zone in the Mission Editor.
 
 local SUB_CONFIG = {
-    type            = "diesel",                     -- "diesel", "ssn", or "custom"
-    name            = "Kursk",                      -- Display name
+    type            = "ssn",                     -- "diesel", "ssn", or "custom"
+    name            = "Red Dragon",                      -- Display name
     spawnZone       = "Submarine_initial_position",  -- Trigger zone name
-    startDepth      = 60,                           -- Starting depth in meters
-    startSpeed      = 8,                            -- Starting speed in m/s
+    startDepth      = 20,                           -- Starting depth in meters
+    startSpeed      = 2,                            -- Starting speed in m/s
     startHeading    = 270,                          -- Starting heading in degrees
     randomizeSpawn  = false,                        -- Randomize position within zone?
 
