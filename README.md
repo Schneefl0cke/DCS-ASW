@@ -276,6 +276,8 @@ Configure AI behavior in the `AI_CONFIG` table:
 ```lua
 local AI_CONFIG = {
     waypointZones   = {"patrol_1", "patrol_2", "patrol_3", "patrol_4"},
+    randomPatrol    = true,         -- true = random order, false = sequential loop
+    enableAttack    = true,         -- false = patrol only, never attack or fire torpedoes
     patrolSpeed     = 5,
     patrolDepth     = 80,
     attackRange     = 12000,
@@ -300,7 +302,7 @@ local AI_CONFIG = {
 
 **PATROL** → **ATTACK** → **EVADE** → **PATROL**
 
-- **PATROL**: Follows randomly shuffled waypoint zones. Uses passive sonar to scan for enemy ships. Moves at configured patrol speed and depth.
+- **PATROL**: Visits waypoint zones in random order (default) or sequentially in the order defined (`randomPatrol = false`), looping back to the first zone on completion. Uses passive sonar to scan for enemy ships. Moves at configured patrol speed and depth. If `enableAttack = false`, detected ships are ignored and the sub stays in patrol.
 - **ATTACK**: Ship detected within attack range → turns toward target, rises to periscope depth, approaches, fires 2-torpedo salvo, then immediately dives deep and evades to a random waypoint.
 - **EVADE (buoy trigger)**: Sonarbuoy deployed within 7 km → dives to max depth, heads away from buoy (±90° randomized cone), reduces speed. Conserves noise makers for torpedo threats.
 - **EVADE (dipping sonar trigger)**: Active dipping sonar detected within 10 km → dives to max depth, heads away from helicopter (±90° randomized cone), deploys noise maker with 60s delay to confuse the active sonar. Higher priority than passive buoys.
@@ -406,6 +408,8 @@ SUB_CONFIG = {
 COMMANDER_MODE = "human"        -- "human", "ai", or "both"
 AI_CONFIG = {
     waypointZones   = {"patrol_1", "patrol_2", "patrol_3", "patrol_4"},
+    randomPatrol    = true,     -- true = random order, false = sequential loop
+    enableAttack    = true,     -- false = patrol only, never attack or fire torpedoes
     patrolSpeed     = 5,
     patrolDepth     = 80,
     attackRange     = 12000,
