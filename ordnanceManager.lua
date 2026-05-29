@@ -50,9 +50,13 @@ function OrdnanceManager:new(config)
         buoys             = config.buoys or {},
         torpedoes         = config.torpedoes or {},
         dippingSonars     = config.dippingSonars or {},
+        maxDepthCharges   = config.maxDepthCharges or 0,
+        dcMaxAltitude     = config.dcMaxAltitude or 500,
+        dcMaxSpeed        = config.dcMaxSpeed or 200,
         groupData         = {},
         buoyIdCounter     = 0,
         torpedoIdCounter  = 0,
+        dcIdCounter       = 0,
         trackedGroups     = {},
     }
     setmetatable(obj, self)
@@ -139,6 +143,10 @@ function OrdnanceManager:initGroup(groupName)
         inventory         = self.maxBuoys,
         torpedoInventory  = self.maxTorpedoes,
         torpedoDepth      = 100,
+        dcInventory       = self.maxDepthCharges,
+        dcDepth           = 50,
+        dcCount           = 4,
+        dcSpacing         = 200,
         state             = "idle",
         prepareScheduleId = nil,
         menus             = {},
@@ -166,6 +174,26 @@ function OrdnanceManager:initGroup(groupName)
     end
     MENU_GROUP_COMMAND:New(mooseGroup, "Prepare to Launch Torpedo", torpedoMenu, self.prepareToLaunchTorpedo, self, groupName)
     MENU_GROUP_COMMAND:New(mooseGroup, "Launch Torpedo!", torpedoMenu, self.launchTorpedo, self, groupName)
+
+    -- Depth charges submenu (only shown when inventory is configured)
+    if self.maxDepthCharges > 0 then
+        local dcMenu = MENU_GROUP:New(mooseGroup, "Depth Charges", rootMenu)
+        data.menus.dc = dcMenu
+        local dcDepthMenu = MENU_GROUP:New(mooseGroup, "Set Detonation Depth", dcMenu)
+        for _, d in ipairs({25, 50, 100, 150, 200, 300}) do
+            MENU_GROUP_COMMAND:New(mooseGroup, d .. "m", dcDepthMenu, self.setDCDepth, self, groupName, d)
+        end
+        local dcCountMenu = MENU_GROUP:New(mooseGroup, "Set Count", dcMenu)
+        for _, c in ipairs({1, 2, 4, 6, 8}) do
+            MENU_GROUP_COMMAND:New(mooseGroup, c .. " charge(s)", dcCountMenu, self.setDCCount, self, groupName, c)
+        end
+        local dcSpacingMenu = MENU_GROUP:New(mooseGroup, "Set Spacing", dcMenu)
+        for _, s in ipairs({100, 200, 400, 600}) do
+            MENU_GROUP_COMMAND:New(mooseGroup, s .. "m", dcSpacingMenu, self.setDCSpacing, self, groupName, s)
+        end
+        MENU_GROUP_COMMAND:New(mooseGroup, "Prepare to Drop", dcMenu, self.prepareToDrop, self, groupName)
+        MENU_GROUP_COMMAND:New(mooseGroup, "Drop!", dcMenu, self.dropCharges, self, groupName)
+    end
 
     -- General
     MENU_GROUP_COMMAND:New(mooseGroup, "Cancel", rootMenu, self.cancelPrepare, self, groupName)
@@ -402,6 +430,10 @@ function OrdnanceManager:showStatus(groupName)
     if data.dippingSonar then
         msg = msg .. "\nDipping sonar: " .. (data.dippingSonar.operational and data.dippingSonar.state or "BROKEN")
     end
+    if data.dcInventory and self.maxDepthCharges > 0 then
+        msg = msg .. string.format("\nDepth charges: %d/%d | Depth: %dm | %d x %dm",
+            data.dcInventory, self.maxDepthCharges, data.dcDepth, data.dcCount, data.dcSpacing)
+    end
     if data.madDetector then
         msg = msg .. "\n" .. data.madDetector:getStatusText()
     end
@@ -454,6 +486,10 @@ function OrdnanceManager:rearmAll(groupName)
         data.dippingSonar:repair()
         extras = extras .. " | Dipping sonar: REPAIRED"
     end
+    if data.dcInventory ~= nil and self.maxDepthCharges > 0 then
+        data.dcInventory = self.maxDepthCharges
+        extras = extras .. " | DC: restocked"
+    end
     if data.madDetector then
         data.madDetector.charge = 100
         extras = extras .. " | MAD: recharged"
@@ -477,7 +513,12 @@ function OrdnanceManager:startPrepareMessages(groupName)
         local unit = self:getGroupUnit(groupName)
         if not unit then return end
 
-        local _, msg = self:checkFlightParams(unit)
+        local _, msg
+        if d.state == "preparing_dc" then
+            _, msg = self:checkDCFlightParams(unit)
+        else
+            _, msg = self:checkFlightParams(unit)
+        end
 
         if d.state == "preparing_launch" then
             local pos = unit:getPoint()
@@ -513,6 +554,15 @@ function OrdnanceManager:startPrepareMessages(groupName)
             msg = msg .. string.format("\nTorpedo heading: %.0f° | Search depth: %dm", heading, d.torpedoDepth)
         end
 
+        if d.state == "preparing_dc" then
+            local heading = self:getUnitHeading(unit)
+            local pos = unit:getPoint()
+            local overWater = self:isPositionOverWater(pos.x, pos.z)
+            msg = msg .. string.format("\nHeading: %.0f° | Depth: %dm | %d charge(s) x %dm spacing",
+                heading, d.dcDepth, d.dcCount, d.dcSpacing)
+            msg = msg .. "\n" .. (overWater and "WATER OK" or "OVER LAND — charges will be discarded")
+        end
+
         self:messageToGroup(groupName, msg, 1)
 
         data.prepareScheduleId = timer.scheduleFunction(function()
@@ -529,6 +579,124 @@ function OrdnanceManager:stopPrepareMessages(groupName)
         timer.removeFunction(data.prepareScheduleId)
         data.prepareScheduleId = nil
     end
+end
+
+-- ===== DEPTH CHARGES =====
+
+function OrdnanceManager:checkDCFlightParams(unit)
+    if not unit then return false, "No aircraft found" end
+    local pos = unit:getPoint()
+    local altitudeAGL = pos.y - land.getHeight({x = pos.x, y = pos.z})
+    local velocity = unit:getVelocity()
+    local speed = math.sqrt(velocity.x^2 + velocity.y^2 + velocity.z^2)
+    local altOk = altitudeAGL <= self.dcMaxAltitude
+    local spdOk = speed <= self.dcMaxSpeed
+    local msg = string.format("Alt: %.0fm AGL %s | Speed: %.0f kt %s",
+        altitudeAGL, altOk and "OK" or "TOO HIGH",
+        speed * 1.943844, spdOk and "OK" or "TOO FAST")
+    return altOk and spdOk, msg
+end
+
+function OrdnanceManager:setDCDepth(groupName, depth)
+    local data = self.groupData[groupName]
+    if not data then return end
+    data.dcDepth = depth
+    self:messageToGroup(groupName, "Depth charge detonation depth: " .. depth .. "m", 5)
+end
+
+function OrdnanceManager:setDCCount(groupName, count)
+    local data = self.groupData[groupName]
+    if not data then return end
+    data.dcCount = count
+    self:messageToGroup(groupName, "Depth charge count: " .. count, 5)
+end
+
+function OrdnanceManager:setDCSpacing(groupName, spacing)
+    local data = self.groupData[groupName]
+    if not data then return end
+    data.dcSpacing = spacing
+    self:messageToGroup(groupName, "Depth charge spacing: " .. spacing .. "m", 5)
+end
+
+function OrdnanceManager:prepareToDrop(groupName)
+    local data = self.groupData[groupName]
+    if not data then return end
+
+    if data.state ~= "idle" then
+        self:messageToGroup(groupName, "Cancel current operation first!", 5)
+        return
+    end
+
+    if data.dcInventory <= 0 then
+        self:messageToGroup(groupName, "No depth charges remaining! Return to rearm.", 5)
+        return
+    end
+
+    data.state = "preparing_dc"
+    local maxSpeedKt = math.floor(self.dcMaxSpeed * 1.943844)
+    self:messageToGroup(groupName, string.format(
+        "Preparing depth charge drop.\nDepth: %dm | %d charge(s) x %dm spacing\nAlt < %dm AGL | Speed < %d kt",
+        data.dcDepth, data.dcCount, data.dcSpacing, self.dcMaxAltitude, maxSpeedKt), 5)
+    self:startPrepareMessages(groupName)
+end
+
+function OrdnanceManager:dropCharges(groupName)
+    local data = self.groupData[groupName]
+    if not data then return end
+
+    if data.state ~= "preparing_dc" then
+        self:messageToGroup(groupName, "Use 'Prepare to Drop' first!", 5)
+        return
+    end
+
+    local unit = self:getGroupUnit(groupName)
+    local paramsOk, msg = self:checkDCFlightParams(unit)
+    if not paramsOk then
+        self:messageToGroup(groupName, "Cannot drop! " .. msg, 5)
+        return
+    end
+
+    local count = math.min(data.dcCount, data.dcInventory)
+    local pos = unit:getPoint()
+    local heading = self:getUnitHeading(unit)
+    local headingRad = math.rad(heading)
+    local dirX = math.cos(headingRad)
+    local dirZ = math.sin(headingRad)
+
+    local dropped = 0
+    local discarded = 0
+
+    for i = 0, count - 1 do
+        self.dcIdCounter = self.dcIdCounter + 1
+        local charge = DepthCharge:new(
+            groupName .. "-DC-" .. self.dcIdCounter,
+            pos.x + dirX * i * data.dcSpacing,
+            pos.z + dirZ * i * data.dcSpacing,
+            data.dcDepth,
+            self.ownerCoalition,
+            self.submarines
+        )
+        if charge then dropped = dropped + 1 else discarded = discarded + 1 end
+    end
+
+    data.dcInventory = data.dcInventory - count
+
+    local dropMsg = string.format(
+        "Depth charges away! %d dropped | Depth: %dm | Spacing: %dm | Remaining: %d/%d",
+        dropped, data.dcDepth, data.dcSpacing, data.dcInventory, self.maxDepthCharges)
+    if discarded > 0 then
+        dropMsg = dropMsg .. " | " .. discarded .. " discarded (over land)"
+    end
+    self:messageToGroup(groupName, dropMsg, 8)
+
+    local enemyCoalition = self.ownerCoalition == coalition.side.BLUE and coalition.side.RED or coalition.side.BLUE
+    trigger.action.outTextForCoalition(enemyCoalition, "WARNING: Depth charges in the water!", 10, false)
+    if ASW_SOUND then
+        ASW_SOUND:playForCoalition(enemyCoalition, "warning_torpedo")
+    end
+
+    self:stopPrepareMessages(groupName)
+    data.state = "idle"
 end
 
 -- ===== DETECTION LOOP =====

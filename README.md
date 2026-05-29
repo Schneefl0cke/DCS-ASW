@@ -18,14 +18,15 @@ Load scripts in this order in the DCS Mission Editor (DO ONCE triggers):
 4. `anti_submarine_torpedo.lua`
 5. `submarineTorpedo.lua`
 6. `dippingSonar.lua`
-7. `madDetector.lua`
-8. `soundScheduler.lua`
-9. `ordnanceManager.lua`
-10. `helicopterHunterManager.lua`
-11. `planeHunterManager.lua`
-12. `humanSubmarineCommander.lua`
-13. `aiSubmarineCommander.lua`
-14. `asw_config.lua`
+7. `depthCharge.lua`
+8. `madDetector.lua`
+9. `soundScheduler.lua`
+10. `ordnanceManager.lua`
+11. `helicopterHunterManager.lua`
+12. `planeHunterManager.lua`
+13. `humanSubmarineCommander.lua`
+14. `aiSubmarineCommander.lua`
+15. `asw_config.lua`
 
 ## Mission Editor Setup
 
@@ -184,6 +185,29 @@ Dipping sonar specifications:
 - The thermal layer affects detection: sonar above the layer has 0.2x penalty against subs below it. Lower the cable below the thermal layer (90m default) for full effectiveness
 - Detection formula is the same as buoys but with 0.25 scale factor instead of 0.15
 - Sonar is repaired when rearming at the rearm zone or carrier
+
+#### Depth Charges *(helicopters and planes)*
+
+Area-effect weapon. No homing — requires a positional fix first. Drops a pattern of charges along the aircraft's current heading; each sinks to the set depth and detonates. Charges that spawn over land are discarded silently.
+
+| Command | Description |
+|---|---|
+| **Set Detonation Depth** | 25m, 50m, 100m, 150m, 200m, 300m |
+| **Set Count** | 1, 2, 4, 6, or 8 charges per drop |
+| **Set Spacing** | 100m, 200m, 400m, or 600m between charges |
+| **Prepare to Drop** | Enter drop mode. HUD shows heading, pattern, and flight params. |
+| **Drop!** | Release the pattern along current heading. |
+
+Depth charge specifications:
+- Sink rate: **3 m/s** (50m depth → ~17s, 200m → ~67s)
+- Kill radius: **80m** (3D distance from detonation point)
+- Pattern extends **forward** from the drop point along the aircraft's heading
+- Charges over land are discarded with a log message — no explosion
+- Drop altitude/speed limits are more relaxed than buoys (configured separately per hunter type)
+- Helicopter default: **4 charges** | Alt < 150m AGL | Speed < ~155 kt
+- Fixed-wing default: **16 charges** | Alt < 500m AGL | Speed < ~389 kt
+- Submarine coalition receives **"Depth charges in the water!"** warning (uses torpedo warning sound)
+- Restocked at rearm zone
 
 #### MAD Detector *(fixed-wing only)*
 
@@ -491,6 +515,7 @@ PLANE_CONFIG = {
 | `anti_submarine_torpedo.lua` | `AntiSubmarineTorpedo` | Player-launched ASW torpedo with active homing sonar |
 | `submarineTorpedo.lua` | `SubmarineTorpedo` | Submarine-launched anti-ship torpedo with cone sonar |
 | `dippingSonar.lua` | `DippingSonar` | Active dipping sonar deployed from hovering helicopter |
+| `depthCharge.lua` | `DepthCharge` | Single depth charge: land-check on spawn, sinks to set depth, 80m kill radius |
 | `madDetector.lua` | `MADDetector` | Magnetic Anomaly Detector for fixed-wing; charge-limited, altitude-dependent |
 | `soundScheduler.lua` | `SoundScheduler` | Priority-based sound playback scheduler per group |
 | `ordnanceManager.lua` | `OrdnanceManager` | Base class: buoy deploy, torpedo launch, inventory, rearm, F10 menus |
