@@ -20,9 +20,11 @@ Load scripts in this order in the DCS Mission Editor (DO ONCE triggers):
 6. `dippingSonar.lua`
 7. `soundScheduler.lua`
 8. `ordnanceManager.lua`
-9. `humanSubmarineCommander.lua`
-10. `aiSubmarineCommander.lua`
-11. `asw_config.lua`
+9. `helicopterHunterManager.lua`
+10. `planeHunterManager.lua`
+11. `humanSubmarineCommander.lua`
+12. `aiSubmarineCommander.lua`
+13. `asw_config.lua`
 
 ## Mission Editor Setup
 
@@ -114,19 +116,25 @@ When destroyed, a **red circle with text** is placed at the sunk position, visib
 
 ## ASW Hunter Side (BLUE)
 
+Hunters are split into two types with separate group name prefixes:
+
+| Type | Prefix | Buoys | Torpedo | Dipping Sonar | Buoy Recovery |
+|---|---|---|---|---|---|
+| Helicopter | `_asw_helo` | Yes | Yes | Yes | Yes |
+| Fixed-wing | `_asw_plane` | Yes | Yes | No | No |
+
 ### F10 Menu: ASW Operations
 
-Available under the group radio menu for any aircraft group with `_asw_hunter` in its name.
-
-#### Sonarbuoys
+#### Sonarbuoys (both types)
 
 | Command | Description |
 |---|---|
 | **Prepare to Launch Buoy** | Enter launch mode. HUD shows altitude/speed readiness. |
-| **Launch Buoy!** | Deploy a sonarbuoy at current position. Requires: Alt < 50m AGL, Speed < 60 m/s. |
-| **Prepare to Recover Buoy** | Enter recovery mode. HUD shows nearest buoy distance. |
-| **Recover Buoy!** | Pick up nearest buoy within 10m. Returns it to inventory. |
+| **Launch Buoy!** | Deploy a sonarbuoy at current position. |
+| **Prepare to Recover Buoy** | *(Helicopters only)* Enter recovery mode. HUD shows nearest buoy distance. |
+| **Recover Buoy!** | *(Helicopters only)* Pick up nearest buoy within 10m. Returns it to inventory. |
 
+- Helicopters carry **4 buoys** by default; fixed-wing carry **8**
 - Each hunter carries **4 buoys** (configurable)
 - Buoys detect submarines every 5 seconds using a probability-based model
 - Detection probability depends on: submarine noise (speed × noise factor), distance, depth, and thermal layer
@@ -419,16 +427,28 @@ AI_CONFIG = {
 }
 
 -- 5. ASW Hunters
-HUNTER_CONFIG = {
-    prefix          = "_asw_hunter",
+HELO_CONFIG = {
+    prefix          = "_asw_helo",      -- group name prefix for helicopters
     rearmZone       = "ASW_Hunter_Rearming",
     rearmUnits      = {},               -- carrier unit names (e.g. {"CVN-74", "CVN-75"})
     rearmRadius     = 500,
     maxBuoys        = 4,
-    maxTorpedoes    = 1,
-    maxAltitude     = 50,
-    maxSpeed        = 60,
-    recoveryRange   = 200,
+    maxTorpedoes    = 2,
+    maxAltitude     = 50,               -- meters AGL
+    maxSpeed        = 60,               -- m/s
+    recoveryRange   = 10,
+    detectInterval  = 5,
+}
+
+PLANE_CONFIG = {
+    prefix          = "_asw_plane",     -- group name prefix for fixed-wing
+    rearmZone       = "ASW_Hunter_Rearming",
+    rearmUnits      = {},
+    rearmRadius     = 500,
+    maxBuoys        = 8,
+    maxTorpedoes    = 2,
+    maxAltitude     = 200,              -- meters AGL
+    maxSpeed        = 120,              -- m/s
     detectInterval  = 5,
 }
 ```
@@ -446,7 +466,9 @@ HUNTER_CONFIG = {
 | `submarineTorpedo.lua` | `SubmarineTorpedo` | Submarine-launched anti-ship torpedo with cone sonar |
 | `dippingSonar.lua` | `DippingSonar` | Active dipping sonar deployed from hovering helicopter |
 | `soundScheduler.lua` | `SoundScheduler` | Priority-based sound playback scheduler per group |
-| `ordnanceManager.lua` | `OrdnanceManager` | Manages hunter group menus, inventory, buoy/torpedo/sonar operations |
+| `ordnanceManager.lua` | `OrdnanceManager` | Base class: buoy deploy, torpedo launch, inventory, rearm, F10 menus |
+| `helicopterHunterManager.lua` | `HelicopterHunterManager` | Extends base with dipping sonar and buoy recovery |
+| `planeHunterManager.lua` | `PlaneHunterManager` | Extends base with fixed-wing altitude/speed limits; no dipping sonar |
 | `humanSubmarineCommander.lua` | `HumanSubmarineCommander` | F10 menus for human submarine control |
 | `aiSubmarineCommander.lua` | `AISubmarineCommander` | Autonomous submarine AI with patrol/attack/evade states |
 | `asw_config.lua` | — | Main entry point, configuration, wiring |

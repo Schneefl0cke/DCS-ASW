@@ -77,10 +77,11 @@ local AI_CONFIG = {
 -- =============================================================================
 -- 5. ASW HUNTER CONFIGURATION
 -- =============================================================================
--- ASW hunter aircraft groups must contain this prefix in their group name.
+-- Helicopter hunters: dipping sonar + buoy recovery + torpedo.
+-- Group names must contain the prefix defined below.
 
-local HUNTER_CONFIG = {
-    prefix          = "_asw_hunter",                -- Group name prefix
+local HELO_CONFIG = {
+    prefix          = "_asw_helo",                  -- Group name prefix for helicopters
     rearmZone       = "ASW_Hunter_Rearming",        -- Trigger zone for rearming (static)
     rearmUnits      = {},                           -- Carrier unit names (e.g. {"CVN-74", "CVN-75"}), overrides rearmZone
     rearmRadius     = 500,                          -- Meters around each rearmUnit
@@ -90,6 +91,21 @@ local HUNTER_CONFIG = {
     maxSpeed        = 60,                           -- Max speed for deploy/recover/launch (m/s)
     recoveryRange   = 10,                           -- Max distance to recover a buoy (meters)
     detectInterval  = 5,                            -- Seconds between sonarbuoy detection cycles
+}
+
+-- Fixed-wing hunters: buoy deployment + torpedo. No dipping sonar, no buoy recovery.
+-- Group names must contain the prefix defined below.
+
+local PLANE_CONFIG = {
+    prefix          = "_asw_plane",                 -- Group name prefix for fixed-wing
+    rearmZone       = "ASW_Hunter_Rearming",        -- Can share the same rearm zone
+    rearmUnits      = {},
+    rearmRadius     = 500,
+    maxBuoys        = 8,                            -- Planes carry more buoys
+    maxTorpedoes    = 2,
+    maxAltitude     = 200,                          -- Higher altitude limit for fixed-wing
+    maxSpeed        = 120,                          -- Higher speed limit for fixed-wing (m/s)
+    detectInterval  = 5,
 }
 
 -- =============================================================================
@@ -156,22 +172,48 @@ end
 -- Shared detectable objects table (submarines + noise makers for buoy detection)
 local detectableObjects = {submarine}
 
--- ===== Ordnance Manager (ASW Hunters) =====
-local ordnanceManager = OrdnanceManager:new({
-    ownerCoalition  = ASW_COALITION,
-    submarines      = detectableObjects,
-    hunterPrefix    = HUNTER_CONFIG.prefix,
-    rearmZone       = HUNTER_CONFIG.rearmZone,
-    rearmUnits      = HUNTER_CONFIG.rearmUnits,
-    rearmRadius     = HUNTER_CONFIG.rearmRadius,
-    maxBuoys        = HUNTER_CONFIG.maxBuoys,
-    maxTorpedoes    = HUNTER_CONFIG.maxTorpedoes,
-    maxAltitude     = HUNTER_CONFIG.maxAltitude,
-    maxSpeed        = HUNTER_CONFIG.maxSpeed,
-    recoveryRange   = HUNTER_CONFIG.recoveryRange,
+-- ===== ASW Hunter Managers =====
+-- Shared pools — both managers write here; AI/human commanders read from here.
+local sharedBuoys        = {}
+local sharedTorpedoes    = {}
+local sharedDippingSonars = {}
+
+local heloManager = HelicopterHunterManager:new({
+    ownerCoalition    = ASW_COALITION,
+    submarines        = detectableObjects,
+    hunterPrefix      = HELO_CONFIG.prefix,
+    rearmZone         = HELO_CONFIG.rearmZone,
+    rearmUnits        = HELO_CONFIG.rearmUnits,
+    rearmRadius       = HELO_CONFIG.rearmRadius,
+    maxBuoys          = HELO_CONFIG.maxBuoys,
+    maxTorpedoes      = HELO_CONFIG.maxTorpedoes,
+    maxAltitude       = HELO_CONFIG.maxAltitude,
+    maxSpeed          = HELO_CONFIG.maxSpeed,
+    recoveryRange     = HELO_CONFIG.recoveryRange,
     thermalLayerDepth = THERMAL_LAYER_DEPTH,
-    detectInterval  = HUNTER_CONFIG.detectInterval,
+    detectInterval    = HELO_CONFIG.detectInterval,
+    buoys             = sharedBuoys,
+    torpedoes         = sharedTorpedoes,
+    dippingSonars     = sharedDippingSonars,
 })
+
+local planeManager = PlaneHunterManager:new({
+    ownerCoalition    = ASW_COALITION,
+    submarines        = detectableObjects,
+    hunterPrefix      = PLANE_CONFIG.prefix,
+    rearmZone         = PLANE_CONFIG.rearmZone,
+    rearmUnits        = PLANE_CONFIG.rearmUnits,
+    rearmRadius       = PLANE_CONFIG.rearmRadius,
+    maxBuoys          = PLANE_CONFIG.maxBuoys,
+    maxTorpedoes      = PLANE_CONFIG.maxTorpedoes,
+    thermalLayerDepth = THERMAL_LAYER_DEPTH,
+    detectInterval    = PLANE_CONFIG.detectInterval,
+    buoys             = sharedBuoys,
+    torpedoes         = sharedTorpedoes,
+})
+
+-- Single detection loop covering all buoys from both manager types
+heloManager:startDetectionLoop()
 
 -- ===== Commanders =====
 local humanCommander, aiCommander
@@ -179,7 +221,7 @@ local humanCommander, aiCommander
 if COMMANDER_MODE == "human" or COMMANDER_MODE == "both" then
     humanCommander = HumanSubmarineCommander:new(
         SUB_COALITION, {submarine}, ASW_COALITION,
-        ordnanceManager.buoys, detectableObjects)
+        sharedBuoys, detectableObjects)
 end
 
 if COMMANDER_MODE == "ai" or COMMANDER_MODE == "both" then
@@ -194,10 +236,10 @@ if COMMANDER_MODE == "ai" or COMMANDER_MODE == "both" then
         evasionDuration  = AI_CONFIG.evasionDuration,
         profile          = AI_CONFIG.profile,
         targetCoalition  = ASW_COALITION,
-        buoys            = ordnanceManager.buoys,
-        torpedoes        = ordnanceManager.torpedoes,
+        buoys            = sharedBuoys,
+        torpedoes        = sharedTorpedoes,
         detectableObjects = detectableObjects,
-        dippingSonars    = ordnanceManager:getDippingSonars(),
+        dippingSonars    = sharedDippingSonars,
     })
 end
 
