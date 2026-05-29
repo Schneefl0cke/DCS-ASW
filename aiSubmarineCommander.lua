@@ -63,6 +63,8 @@ function AISubmarineCommander:new(sub, config)
         evasionSpeed = isAggressive and 3 or 1,
         silentChance = isAggressive and 0.3 or 0.7,  -- chance of going full stop during evasion
 
+        randomPatrol = config.randomPatrol ~= false,
+
         -- State
         state = "patrol",      -- patrol, attack, evade
         currentWaypoint = nil,
@@ -92,17 +94,17 @@ function AISubmarineCommander:new(sub, config)
     return obj
 end
 
--- Shuffle waypoint order randomly
 function AISubmarineCommander:shuffleWaypoints()
-    self.waypointOrder = {}
     local indices = {}
     for i = 1, #self.waypointZones do
         indices[#indices + 1] = i
     end
-    -- Fisher-Yates shuffle
-    for i = #indices, 2, -1 do
-        local j = math.random(1, i)
-        indices[i], indices[j] = indices[j], indices[i]
+    if self.randomPatrol then
+        -- Fisher-Yates shuffle
+        for i = #indices, 2, -1 do
+            local j = math.random(1, i)
+            indices[i], indices[j] = indices[j], indices[i]
+        end
     end
     self.waypointOrder = indices
     self.waypointIndex = 0
@@ -112,7 +114,9 @@ end
 function AISubmarineCommander:nextWaypoint()
     self.waypointIndex = self.waypointIndex + 1
     if self.waypointIndex > #self.waypointOrder then
-        self:shuffleWaypoints()
+        if self.randomPatrol then
+            self:shuffleWaypoints()
+        end
         self.waypointIndex = 1
     end
 
