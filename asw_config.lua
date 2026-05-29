@@ -64,6 +64,8 @@ local COMMANDER_MODE = "human"
 -- AI Commander settings (only used when mode is "ai" or "both"):
 local AI_CONFIG = {
     waypointZones   = {"patrol_1", "patrol_2", "patrol_3", "patrol_4"},
+    randomPatrol    = true,     -- true = random order, false = sequential loop
+    enableAttack    = true,     -- false = patrol only, never attack or fire torpedoes
     patrolSpeed     = 5,        -- m/s while patrolling
     patrolDepth     = 80,       -- meters while patrolling
     attackRange     = 12000,    -- meters to engage detected ships
@@ -183,6 +185,8 @@ end
 if COMMANDER_MODE == "ai" or COMMANDER_MODE == "both" then
     aiCommander = AISubmarineCommander:new(submarine, {
         waypointZones    = AI_CONFIG.waypointZones,
+        randomPatrol     = AI_CONFIG.randomPatrol,
+        enableAttack     = AI_CONFIG.enableAttack,
         patrolSpeed      = AI_CONFIG.patrolSpeed,
         patrolDepth      = AI_CONFIG.patrolDepth,
         attackRange      = AI_CONFIG.attackRange,
