@@ -40,8 +40,9 @@ Load scripts in this order in the DCS Mission Editor (DO ONCE triggers):
 
 ### Required Groups
 
-- ASW hunter aircraft groups must have **`_asw_hunter`** in their group name (configurable). Each group should be a single aircraft (helicopter recommended).
-- Single-player is possible, but not recommended; a second player or AI copilot for the helicopters improves the experience significantly.
+- Helicopter ASW groups must have **`_asw_helo`** in their group name (configurable via `HELO_CONFIG.prefix`).
+- Fixed-wing ASW groups must have **`_asw_plane`** in their group name (configurable via `PLANE_CONFIG.prefix`).
+- Each group should be a single aircraft. Single-player is possible, but not recommended; a second player or AI copilot for the helicopters improves the experience significantly.
 
 ### Coalition Setup
 
@@ -64,7 +65,22 @@ This framework supports mission sound cues through `soundScheduler.lua` and `asw
    - Set a config entry to `nil` to disable that sound.
 3. Make sure `soundScheduler.lua` is loaded before `asw_config.lua` in the mission load order.
 
-The sound scheduler registers sound names such as `torpedo_launch`, `torpedo_homing`, `buoy_splash`, `warning_torpedo`, and `warning_sonar`.
+The sound scheduler registers these sound names:
+
+| Name | Trigger |
+|---|---|
+| `sonar_ping` | Each dipping sonar ping |
+| `sonar_extend` | Dipping sonar lowering |
+| `sonar_retrieve` | Dipping sonar raised |
+| `sonar_splash` | Dipping sonar hits water |
+| `sonar_cable_break` | Cable breaks (speed/altitude exceeded) |
+| `torpedo_launch` | ASW torpedo launched |
+| `torpedo_homing` | Torpedo acquires contact |
+| `buoy_splash` | Sonarbuoy deployed |
+| `recover_splash` | Sonarbuoy recovered |
+| `noisemaker_loop` | Noise maker active (looping) |
+| `warning_torpedo` | Submarine side warned of ASW torpedo / depth charges |
+| `warning_sonar` | Submarine side warned of active sonar ping |
 
 ---
 
@@ -156,7 +172,7 @@ Hunters are split into two types with separate group name prefixes:
 | **Prepare to Launch Torpedo** | Enter launch mode. HUD shows heading + depth setting. |
 | **Launch Torpedo!** | Fire torpedo on player's current heading. Same flight parameter requirements as buoys. |
 
-- Each hunter carries **1 torpedo** (configurable)
+- Each hunter carries **2 torpedoes** by default (configurable)
 - Speed: 30 knots (15.43 m/s)
 - Turn rate: 3°/s
 - Sonar range: 1.5 km (checked every second)
@@ -233,7 +249,7 @@ MAD specifications:
 - Contact shows horizontal position only — **depth is unknown** from MAD
 - **Charge system**: represents continuous power draw and sensor heating
   - Drains while active; recharges while inactive
-  - Drain rate: `0.4 + searchDepth × 0.004` %/sec (e.g. 0.8%/s at 100m → ~125s of use)
+  - Drain rate: `0.2 + searchDepth × 0.002` %/sec (e.g. 0.4%/s at 100m → ~250s of use)
   - Recharge: 0.25%/sec → ~400s for full recharge from empty
   - Auto-deactivates at 0% charge; fully recharged at rearm zone
 - Submarine side receives a vague warning when swept
@@ -489,8 +505,11 @@ HELO_CONFIG = {
     rearmRadius     = 500,
     maxBuoys        = 4,
     maxTorpedoes    = 2,
-    maxAltitude     = 50,               -- meters AGL
-    maxSpeed        = 60,               -- m/s
+    maxDepthCharges = 4,
+    maxAltitude     = 50,               -- max AGL for buoy/torpedo deploy (meters)
+    maxSpeed        = 60,               -- max speed for buoy/torpedo deploy (m/s)
+    dcMaxAltitude   = 150,              -- max AGL for depth charge drop (meters)
+    dcMaxSpeed      = 80,               -- max speed for depth charge drop (m/s)
     recoveryRange   = 10,
     detectInterval  = 5,
 }
@@ -502,9 +521,20 @@ PLANE_CONFIG = {
     rearmRadius     = 500,
     maxBuoys        = 8,
     maxTorpedoes    = 2,
-    maxAltitude     = 200,              -- meters AGL
-    maxSpeed        = 120,              -- m/s
+    maxDepthCharges = 16,
+    maxAltitude     = 200,              -- max AGL for buoy/torpedo deploy (meters)
+    maxSpeed        = 120,              -- max speed for buoy/torpedo deploy (m/s)
+    dcMaxAltitude   = 500,              -- max AGL for depth charge drop (meters)
+    dcMaxSpeed      = 200,              -- max speed for depth charge drop (m/s)
     detectInterval  = 5,
+    madConfig       = {
+        detectionRange  = 500,   -- horizontal detection radius at optimal altitude (meters)
+        maxSearchDepth  = 200,   -- deepest available search depth setting (meters)
+        maxAltitude     = 150,   -- max AGL for MAD operation (meters)
+        drainBase       = 0.2,   -- charge drain %/sec at minimum depth
+        drainPerMeter   = 0.002, -- additional drain %/sec per meter of search depth
+        rechargeRate    = 0.25,  -- charge recovery %/sec when inactive
+    },
 }
 ```
 
