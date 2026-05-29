@@ -34,8 +34,8 @@ function MADDetector:new(groupName, ownerCoalition, submarines, config)
         detectionRange  = config.detectionRange or 500,
         maxSearchDepth  = config.maxSearchDepth  or 200,
         maxAltitude     = config.maxAltitude     or 150,
-        drainBase       = config.drainBase       or 0.4,
-        drainPerMeter   = config.drainPerMeter   or 0.004,
+        drainBase       = config.drainBase       or 0.2,
+        drainPerMeter   = config.drainPerMeter   or 0.002,
         rechargeRate    = config.rechargeRate    or 0.25,
         searchDepth     = 100,   -- current setting, default 100m
         charge          = 100,   -- 0-100%
@@ -111,22 +111,61 @@ function MADDetector:startUpdateLoop()
                         "MAD charge depleted — system offline. Recharging.", 10, false)
                 end
             elseif unit then
-                -- Scan every 2 seconds
+                -- Scan and update HUD every 2 seconds
                 self.scanTick = self.scanTick + 1
                 if self.scanTick >= 2 then
                     self.scanTick = 0
                     self:scan(unit)
+                    self:sendStatusHUD(unit)
                 end
             end
         else
             -- Recharge while inactive
             self.charge = math.min(100, self.charge + self.rechargeRate)
+            self.rechargeTick = (self.rechargeTick or 0) + 1
+            if self.rechargeTick >= 5 then
+                self.rechargeTick = 0
+                local dcsGroup = Group.getByName(self.groupName)
+                if dcsGroup and dcsGroup:isExist() then
+                    local timeToFull = math.floor((100 - self.charge) / self.rechargeRate)
+                    trigger.action.outTextForGroup(dcsGroup:getID(),
+                        string.format("MAD RECHARGING | Charge: %d%% (~%ds to full)",
+                            math.floor(self.charge), timeToFull), 5, false)
+                end
+            end
         end
 
         self.updateScheduleId = timer.scheduleFunction(function() update() end, nil, timer.getTime() + 1)
     end
 
     timer.scheduleFunction(function() update() end, nil, timer.getTime() + 1)
+end
+
+function MADDetector:sendStatusHUD(unit)
+    local dcsGroup = Group.getByName(self.groupName)
+    if not dcsGroup or not dcsGroup:isExist() then return end
+
+    local pos = unit:getPoint()
+    local altAGL = pos.y - land.getHeight({x = pos.x, y = pos.z})
+    local timeRemaining = math.floor(self.charge / self:getDrainRate())
+
+    local msg
+    if altAGL > self.maxAltitude then
+        msg = string.format(
+            "MAD SCANNING | Charge: %d%% (~%ds remaining)\nAlt: %.0fm AGL — ABOVE LIMIT (%dm) | NO SIGNAL\nFly lower for effective detection.",
+            math.floor(self.charge), timeRemaining, altAGL, self.maxAltitude)
+    else
+        local altFactor   = math.max(0.1, (50 / math.max(altAGL, 10)) ^ (1/3))
+        local effectiveRange = math.floor(self.detectionRange * altFactor)
+        local effectiveness  = math.floor(altFactor * 100)
+        msg = string.format(
+            "MAD SCANNING | Charge: %d%% (~%ds remaining)\nAlt: %.0fm AGL | Range: %dm | Effectiveness: %d%%\nDepth: %dm | Drain: %.1f%%/s",
+            math.floor(self.charge), timeRemaining, altAGL,
+            effectiveRange, effectiveness,
+            self.searchDepth, self:getDrainRate())
+    end
+
+    trigger.action.outTextForGroup(dcsGroup:getID(), msg, 2, false)
 end
 
 function MADDetector:scan(unit)

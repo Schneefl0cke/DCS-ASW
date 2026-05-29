@@ -116,8 +116,8 @@ local PLANE_CONFIG = {
         detectionRange  = 500,   -- Horizontal detection radius at optimal altitude (meters)
         maxSearchDepth  = 200,   -- Deepest available search depth setting (meters)
         maxAltitude     = 150,   -- Max AGL for MAD operation (meters)
-        drainBase       = 0.4,   -- Charge drain %/sec at minimum depth
-        drainPerMeter   = 0.004, -- Additional drain %/sec per meter of search depth
+        drainBase       = 0.2,   -- Charge drain %/sec at minimum depth
+        drainPerMeter   = 0.002, -- Additional drain %/sec per meter of search depth
         rechargeRate    = 0.25,  -- Charge recovery %/sec when inactive
     },
 }
