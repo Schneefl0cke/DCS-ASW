@@ -5,7 +5,7 @@ A two-sided ASW game system for DCS World using MOOSE framework. One side operat
 ## Requirements
 
 - DCS World
-- MOOSE framework loaded before these scripts
+- MOOSE framework loaded before these scripts - https://github.com/FlightControl-Master/MOOSE
 - User flag `Debug` set to `1` for debug messages (optional)
 
 ## Script Load Order
@@ -55,7 +55,7 @@ If loading individual source files, use this order in the DCS Mission Editor (DO
 
 - Helicopter ASW groups must have **`_asw_helo`** in their group name (configurable via `HELO_CONFIG.prefix`).
 - Fixed-wing ASW groups must have **`_asw_plane`** in their group name (configurable via `PLANE_CONFIG.prefix`).
-- Each group should be a single aircraft. Single-player is possible, but not recommended; a second player or AI copilot for the helicopters improves the experience significantly.
+- Each group should be a single aircraft. Single-player is possible, but not recommended; a second player as copilot for the helicopters improves the experience significantly.
 
 ### Coalition Setup
 
