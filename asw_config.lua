@@ -170,6 +170,9 @@ end
 -- Make scheduler globally accessible for other modules
 ASW_SOUND = soundScheduler
 
+-- Shared depth-charge detonation log — DepthCharge writes here, AI reads it
+ASW_DC_DETONATIONS = {}
+
 -- ===== Create Submarine =====
 local submarine
 if SUB_CONFIG.type == "diesel" then

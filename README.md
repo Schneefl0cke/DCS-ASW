@@ -402,8 +402,9 @@ local AI_CONFIG = {
 **PATROL** → **ATTACK** → **EVADE** → **PATROL**
 
 - **PATROL**: Visits waypoint zones in random order (default) or sequentially in the order defined (`randomPatrol = false`), looping back to the first zone on completion. Uses passive sonar to scan for enemy ships. Moves at configured patrol speed and depth. If `enableAttack = false`, detected ships are ignored and the sub stays in patrol.
-- **ATTACK**: Ship detected within attack range → turns toward target, rises to periscope depth, approaches, fires 2-torpedo salvo, then immediately dives deep and evades to a random waypoint.
-- **EVADE (buoy trigger)**: Sonarbuoy deployed within 7 km → dives to max depth, heads away from buoy (±90° randomized cone), reduces speed. Conserves noise makers for torpedo threats.
+- **ATTACK**: Ship detected within attack range → turns toward target, rises to periscope depth, approaches, fires 2-torpedo salvo, then pre-deploys a noise maker (30s delay) to mask the retreat, dives deep, and evades to a random waypoint.
+- **EVADE (buoy trigger)**: Sonarbuoy deployed within 7 km → dives to max depth, heads away from buoy (±90° randomized cone), reduces speed. Conserves noise makers for higher-priority threats.
+- **EVADE (depth charge trigger)**: Depth charge detonates within 1.5 km → sharp random heading change (±90–150°), dives to or below the thermal layer, sprints away briefly, deploys noise maker (30s delay aggressive / 60s cautious). Has a 20-second cooldown so a full charge pattern only triggers one reaction. Interrupts buoy/sonar evasion but not torpedo evasion.
 - **EVADE (dipping sonar trigger)**: Active dipping sonar detected within 10 km → dives to max depth, heads away from helicopter (±90° randomized cone), deploys noise maker with 60s delay to confuse the active sonar. Higher priority than passive buoys.
 - **EVADE (torpedo trigger — highest priority)**: ASW torpedo detected within 10 km → immediately deploys noise maker, random depth change (deep or 100m shallower), goes silent or crawls based on profile, random heading. Re-deploys noise makers if torpedo persists. Resets evasion timer.
 

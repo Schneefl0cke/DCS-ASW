@@ -68,6 +68,7 @@ function AISubmarineCommander:new(sub, config)
 
         -- State
         state = "patrol",      -- patrol, attack, evade
+        evasionType = nil,     -- "torpedo", "depthcharge", "sonar", "buoy", "disengage"
         currentWaypoint = nil,
         currentWaypointName = nil,
         waypointOrder = {},
@@ -76,6 +77,7 @@ function AISubmarineCommander:new(sub, config)
         torpedosFiredThisAttack = 0,
         evasionTimer = 0,
         lastUpdateTime = timer.getTime(),
+        lastDCReactionTime = 0,
         torpedoIdCounter = 0,
         noiseMakerIdCounter = 0,
         updateScheduleId = nil,
@@ -174,6 +176,7 @@ end
 -- Start patrol state
 function AISubmarineCommander:startPatrol()
     self.state = "patrol"
+    self.evasionType = nil
     self.torpedosFiredThisAttack = 0
     self.planText = "Heading to " .. tostring(self.currentWaypointName or "next waypoint")
     self.sub:setSpeed(self.patrolSpeed)
@@ -201,13 +204,15 @@ function AISubmarineCommander:startUpdateLoop()
         local dt = currentTime - self.lastUpdateTime
         self.lastUpdateTime = currentTime
 
-        -- Always check for ASW torpedo threat (highest priority)
+        -- Priority: torpedo > depth charge > dipping sonar > buoy
         if self.state ~= "evade" and self:detectASWTorpedo() then
             self:startTorpedoEvasion()
-        -- Check for active dipping sonar (high priority)
+        -- Depth charge: can interrupt patrol, attack, and non-torpedo evasion
+        elseif self.evasionType ~= "torpedo" and self:detectNearbyDetonation() then
+            self:startDepthChargeEvasion()
+        -- Dipping sonar and buoy only checked during patrol
         elseif self.state == "patrol" and self:detectActiveDippingSonar() then
             self:startDippingSonarEvasion()
-        -- Check for buoy proximity
         elseif self.state == "patrol" and self:detectNearbyBuoy() then
             self:startBuoyEvasion()
         end
@@ -324,8 +329,14 @@ end
 function AISubmarineCommander:abortAttackAndEvade()
     self.attackTarget = nil
     self.state = "evade"
+    self.evasionType = "disengage"
     self.evasionTimer = 0
     self.planText = "Disengage and dive deep"
+
+    -- Pre-deploy noise maker to mask the sprint-and-dive retreat from passive listeners
+    if self.sub.noiseMakerCount > 0 then
+        self:deployNoiseMaker(30)
+    end
 
     -- Dive deep, random heading toward a patrol point
     self.sub:setTargetDepth(self.sub.maxDepth)
@@ -342,6 +353,7 @@ end
 -- Evade because a buoy was detected nearby
 function AISubmarineCommander:startBuoyEvasion()
     self.state = "evade"
+    self.evasionType = "buoy"
     self.evasionTimer = 0
     self.attackTarget = nil
     self.planText = "Evade nearby buoy"
@@ -372,6 +384,7 @@ end
 -- Evade because an ASW torpedo was detected
 function AISubmarineCommander:startTorpedoEvasion()
     self.state = "evade"
+    self.evasionType = "torpedo"
     self.evasionTimer = 0
     self.attackTarget = nil
     self.planText = "Evade incoming ASW torpedo"
@@ -423,7 +436,66 @@ function AISubmarineCommander:updateEvade(dt)
     end
 end
 
+-- React to a nearby depth charge detonation
+function AISubmarineCommander:startDepthChargeEvasion()
+    self.lastDCReactionTime = timer.getTime()
+    self.state = "evade"
+    self.evasionType = "depthcharge"
+    self.evasionTimer = 0
+    self.attackTarget = nil
+    self.planText = "Evade depth charge"
+
+    -- Sharp random heading change to clear the blast area
+    local turn = (math.random() > 0.5 and 1 or -1) * math.random(90, 150)
+    self.sub:setCourse((self.sub.heading + turn) % 360)
+
+    -- Dive to or below the thermal layer for cover if above it, otherwise go max depth
+    local thermalLayer = self.sub.thermalLayerDepth or 90
+    if self.sub.depth < thermalLayer then
+        self.sub:setTargetDepth(math.min(self.sub.maxDepth, thermalLayer + 20))
+    else
+        self.sub:setTargetDepth(self.sub.maxDepth)
+    end
+
+    -- Sprint away briefly
+    self.sub:setSpeed(math.min(self.sub.maxSpeed, math.max(self.evasionSpeed + 2, 4)))
+
+    -- Deploy noise maker to draw attention away while evading
+    if self.sub.noiseMakerCount > 0 then
+        local delay = self.profile == "aggressive" and 30 or 60
+        self:deployNoiseMaker(delay)
+    end
+
+    self:updateStatusDisplay()
+    log(self.sub.name .. " AI: Depth charge! Evasive maneuver!", self.sub.ownerCoalition)
+end
+
 -- ===== THREAT DETECTION =====
+
+-- Check for a recent depth charge detonation within reaction range.
+-- Cleans up stale entries as a side effect. Has a per-instance cooldown
+-- so a full pattern (4-8 charges) only triggers one reaction.
+function AISubmarineCommander:detectNearbyDetonation()
+    if not ASW_DC_DETONATIONS then return false end
+    local now = timer.getTime()
+    if (now - self.lastDCReactionTime) < 20 then return false end
+
+    local i = 1
+    while i <= #ASW_DC_DETONATIONS do
+        local det = ASW_DC_DETONATIONS[i]
+        if (now - det.time) > 30 then
+            table.remove(ASW_DC_DETONATIONS, i)
+        else
+            local dx = det.x - self.sub.x
+            local dz = det.z - self.sub.z
+            if math.sqrt(dx * dx + dz * dz) < 1500 then
+                return true
+            end
+            i = i + 1
+        end
+    end
+    return false
+end
 
 -- Check if any active buoy is within evasion range
 function AISubmarineCommander:detectNearbyBuoy()
@@ -495,6 +567,7 @@ end
 -- Evade active dipping sonar: dive deep, move away, deploy noise maker
 function AISubmarineCommander:startDippingSonarEvasion()
     self.state = "evade"
+    self.evasionType = "sonar"
     self.evasionTimer = 0
     self.attackTarget = nil
     self.planText = "Evade active dipping sonar"
