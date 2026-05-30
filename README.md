@@ -299,12 +299,26 @@ Available as coalition menu for the submarine's coalition.
 | **Change Heading** | Adjust heading: ±5°, ±10°, ±25°, ±50°, ±90° (applied to target heading) |
 | **Set Heading** | Set absolute heading: N, NE, E, SE, S, SW, W, NW |
 | **Change Speed** | Adjust speed: ±1, ±2, ±5, ±10 m/s (applied to target speed) |
+| **Set Speed** | Jump to an absolute speed preset — Stop, Silent, 25%, 50%, 75%, Full Speed (rounded to whole m/s, computed from `maxSpeed`) |
 | **Change Depth** | Adjust depth: ±10m, ±25m, ±50m, ±100m |
-| **Dive (max depth)** | Go to maximum operating depth |
-| **Periscope Depth** | Rise to 20m (required for torpedo launch) |
-| **Level (hold depth)** | Hold current depth |
+| **Dive (max depth)** | Go to maximum operating depth (inside Change Depth) |
+| **Periscope Depth** | Rise to 20m — inside Change Depth (required for torpedo launch) |
+| **Level (hold depth)** | Hold current depth — inside Change Depth |
+| **Set Depth** | Jump to an absolute depth preset — see below |
 
 The status display shows both current and target values: `Hdg: 270° -> 315° | Spd: 3.5 -> 8 m/s`
+
+**Set Depth presets** (computed at mission start from the configured thermal layer and submarine type):
+
+| Entry | Depth |
+|---|---|
+| Periscope | 20m (fixed) |
+| Above Layer | `thermalLayerDepth − 10` (e.g. 80m if layer is 90m) |
+| Below Layer | `thermalLayerDepth + 10` (e.g. 100m if layer is 90m) |
+| Fixed steps | 150m, 200m, 250m … up to `maxDepth` in 50m increments |
+| Max (if needed) | `maxDepth` added as a labelled entry when it doesn't fall on a 50m step |
+
+Steps that would duplicate an Above/Below Layer entry are skipped automatically.
 
 #### Torpedoes (Anti-Ship)
 

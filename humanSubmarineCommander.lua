@@ -46,7 +46,7 @@ function HumanSubmarineCommander:buildMenus()
             MENU_COALITION_COMMAND:New(side, h[2], setHeadingMenu, self.setHeading, self, sub, h[1])
         end
 
-        -- Speed submenu
+        -- Change Speed submenu (relative adjustments)
         local speedMenu = MENU_COALITION:New(side, "Change Speed", subMenu)
         local speedDeltas = {-10, -5, -2, -1, 1, 2, 5, 10}
         for _, delta in ipairs(speedDeltas) do
@@ -54,7 +54,28 @@ function HumanSubmarineCommander:buildMenus()
             MENU_COALITION_COMMAND:New(side, label, speedMenu, self.changeSpeed, self, sub, delta)
         end
 
-        -- Depth submenu
+        -- Set Speed submenu (absolute presets based on maxSpeed)
+        local setSpeedMenu = MENU_COALITION:New(side, "Set Speed", subMenu)
+
+        MENU_COALITION_COMMAND:New(side, "Stop (0 m/s)", setSpeedMenu, self.setSpeed, self, sub, 0)
+        MENU_COALITION_COMMAND:New(side, "Silent (1 m/s)", setSpeedMenu, self.setSpeed, self, sub, 1)
+
+        local usedSpeeds = {0, 1}
+        for _, entry in ipairs({{25, "25%%"}, {50, "50%%"}, {75, "75%%"}, {100, "Full Speed"}}) do
+            local pct, label = entry[1], entry[2]
+            local speed = math.floor(sub.maxSpeed * pct / 100 + 0.5)
+            speed = math.max(2, speed)  -- never collide with Stop or Silent
+            local isDupe = false
+            for _, u in ipairs(usedSpeeds) do if u == speed then isDupe = true break end end
+            if not isDupe then
+                MENU_COALITION_COMMAND:New(side,
+                    string.format("%s (%d m/s)", label, speed),
+                    setSpeedMenu, self.setSpeed, self, sub, speed)
+                usedSpeeds[#usedSpeeds + 1] = speed
+            end
+        end
+
+        -- Change Depth submenu (relative adjustments)
         local depthMenu = MENU_COALITION:New(side, "Change Depth", subMenu)
         local depthDeltas = {-100, -50, -25, -10, 10, 25, 50, 100}
         for _, delta in ipairs(depthDeltas) do
@@ -66,6 +87,31 @@ function HumanSubmarineCommander:buildMenus()
         MENU_COALITION_COMMAND:New(side, "Dive (max depth)", depthMenu, self.dive, self, sub)
         MENU_COALITION_COMMAND:New(side, "Periscope Depth", depthMenu, self.periscopeDepth, self, sub)
         MENU_COALITION_COMMAND:New(side, "Level (hold depth)", depthMenu, self.level, self, sub)
+
+        -- Set Depth submenu (absolute presets)
+        local setDepthMenu = MENU_COALITION:New(side, "Set Depth", subMenu)
+
+        MENU_COALITION_COMMAND:New(side, "Periscope (20m)", setDepthMenu, self.setDepth, self, sub, 20)
+
+        -- Two entries relative to the thermal layer, computed at mission start
+        local layer      = sub.thermalLayerDepth or 90
+        local aboveLayer = math.max(21, layer - 10)
+        local belowLayer = layer + 10
+        MENU_COALITION_COMMAND:New(side, string.format("Above Layer (%dm)", aboveLayer), setDepthMenu, self.setDepth, self, sub, aboveLayer)
+        MENU_COALITION_COMMAND:New(side, string.format("Below Layer (%dm)", belowLayer), setDepthMenu, self.setDepth, self, sub, belowLayer)
+
+        -- Fixed steps from 150m to maxDepth; skip any that equal the layer presets
+        local d = 150
+        while d <= sub.maxDepth do
+            if d ~= aboveLayer and d ~= belowLayer then
+                MENU_COALITION_COMMAND:New(side, d .. "m", setDepthMenu, self.setDepth, self, sub, d)
+            end
+            d = d + 50
+        end
+        -- Add maxDepth if it doesn't fall on a 50m step
+        if sub.maxDepth % 50 ~= 0 and sub.maxDepth >= 150 then
+            MENU_COALITION_COMMAND:New(side, sub.maxDepth .. "m (max)", setDepthMenu, self.setDepth, self, sub, sub.maxDepth)
+        end
 
         -- Torpedo submenu
         local torpedoMenu = MENU_COALITION:New(side, "Torpedoes", subMenu)
@@ -98,6 +144,16 @@ function HumanSubmarineCommander:changeSpeed(sub, delta)
     if not sub:isAlive() then return end
     local newSpeed = math.max(0, sub.targetSpeed + delta)
     sub:setSpeed(newSpeed)
+end
+
+function HumanSubmarineCommander:setSpeed(sub, speed)
+    if not sub:isAlive() then return end
+    sub:setSpeed(speed)
+end
+
+function HumanSubmarineCommander:setDepth(sub, depth)
+    if not sub:isAlive() then return end
+    sub:setTargetDepth(depth)
 end
 
 function HumanSubmarineCommander:changeDepth(sub, delta)
