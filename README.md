@@ -226,13 +226,15 @@ Rearming at the rearm zone/carrier:
 
 | Command | Description |
 |---|---|
-| **Set Cable Depth** | Choose sonar depth: 10m, 30m, 50m, 70m, or 100m |
-| **Lower Sonar** | Deploy the dipping sonar at the set cable depth |
+| **Extend Cable** | Increase cable length: +10m, +25m, +50m, or +100m |
+| **Retract Cable** | Decrease cable length: -10m, -25m, -50m, or -100m |
+| **Lower Sonar** | Deploy the dipping sonar at the current cable target depth |
+| **Stop Sonar** | Halt cable movement and hold current depth |
 | **Raise Sonar** | Retrieve the dipping sonar back into the aircraft |
 
 Dipping sonar specifications:
 - Active sonar with **8 km detection range** and **0.25 scale factor** (more effective than passive buoys)
-- Cable depth: 0–100m (adjustable via presets, can be changed while active)
+- Cable depth: 0–100m (adjustable in increments, can be changed while active; default 100m)
 - Lower/raise rate: 5 m/s
 - Pings every **3 seconds** while active
 - **Speed limit**: cable breaks above 15 m/s. Warnings start at 5 m/s
