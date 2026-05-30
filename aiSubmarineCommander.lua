@@ -41,9 +41,25 @@ function AISubmarineCommander:new(sub, config)
     local profile = config.profile or "cautious"
     local isAggressive = profile == "aggressive"
 
+    -- Validate waypoint zones: filter out any that don't exist in the mission
+    local validWaypoints = {}
+    for _, name in ipairs(config.waypointZones or {}) do
+        if trigger.misc.getZone(name) then
+            validWaypoints[#validWaypoints + 1] = name
+        else
+            trigger.action.outTextForCoalition(sub.ownerCoalition,
+                "ASW WARNING: AI waypoint zone '" .. name .. "' not found — skipped.", 15)
+            env.info("ASW WARNING: AI waypoint zone '" .. name .. "' not found — skipped.", false)
+        end
+    end
+    if #validWaypoints == 0 and #(config.waypointZones or {}) > 0 then
+        trigger.action.outTextForCoalition(sub.ownerCoalition,
+            "ASW WARNING: No valid AI waypoint zones found — submarine will not patrol.", 20)
+    end
+
     local obj = {
         sub = sub,
-        waypointZones = config.waypointZones or {},
+        waypointZones = validWaypoints,
         patrolSpeed = config.patrolSpeed or 5,
         patrolDepth = config.patrolDepth or 80,
         attackRange = config.attackRange or (isAggressive and 15000 or 10000),
