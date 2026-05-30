@@ -195,10 +195,10 @@ Recovered buoys go into one of two inventory slots:
 | Recovery type | Destination | Can redeploy? |
 |---|---|---|
 | Active buoy (battery remaining) | `savedBuoys` inventory | Yes — immediately, battery resumes where it left off |
-| Depleted buoy (dead) | `expiredCount` inventory | No — must rearm first; carrier replaces battery |
+| Depleted buoy (dead) | `expiredCount` inventory | No — must rearm first; rearming replaces battery |
 
 Rearming at the rearm zone/carrier:
-1. All expired buoys on board are **revived to full battery** (free — carrier replaces batteries)
+1. All expired buoys on board are **revived to full battery** (free — rearming replaces batteries)
 2. The global reserve pool tops up the hunter's rack up to `maxBuoys`
 3. If the pool is empty, only recovered/revived buoys refill the rack — a warning is shown
 
