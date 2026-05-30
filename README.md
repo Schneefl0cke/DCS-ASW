@@ -5,7 +5,7 @@ A two-sided ASW game system for DCS World using MOOSE framework. One side operat
 ## Requirements
 
 - DCS World
-- MOOSE framework loaded before these scripts
+- MOOSE framework loaded before these scripts - https://github.com/FlightControl-Master/MOOSE
 - User flag `Debug` set to `1` for debug messages (optional)
 
 ## Script Load Order
