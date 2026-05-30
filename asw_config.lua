@@ -175,10 +175,24 @@ ASW_SOUND = soundScheduler
 ASW_DC_DETONATIONS = {}
 
 -- ===== Create Submarine =====
--- Resolve spawn zone: if spawnZone is a table, pick one at random.
+-- Resolve spawn zone: if spawnZone is a table, pick one at random from
+-- only the zones that actually exist in the mission. Warns about missing zones.
 local function resolveSpawnZone(cfg)
     if type(cfg.spawnZone) == "table" and #cfg.spawnZone > 0 then
-        local chosen = cfg.spawnZone[math.random(#cfg.spawnZone)]
+        local valid = {}
+        for _, name in ipairs(cfg.spawnZone) do
+            if trigger.misc.getZone(name) then
+                valid[#valid + 1] = name
+            else
+                trigger.action.outText("ASW WARNING: spawn zone '" .. name .. "' not found in mission — skipped.", 15)
+                env.info("ASW WARNING: spawn zone '" .. name .. "' not found in mission — skipped.", false)
+            end
+        end
+        if #valid == 0 then
+            trigger.action.outText("ASW ERROR: No valid spawn zones found! Check spawnZone names in asw_config.lua.", 30)
+            return nil
+        end
+        local chosen = valid[math.random(#valid)]
         debugMessage("ASW: submarine spawn zone randomly chosen: " .. chosen)
         return chosen
     end

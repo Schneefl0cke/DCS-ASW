@@ -64,8 +64,31 @@ function OrdnanceManager:new(config)
         trackedGroups     = {},
     }
     setmetatable(obj, self)
+    obj:validateConfig()
     obj:startGroupScanner()
     return obj
+end
+
+function OrdnanceManager:validateConfig()
+    local prefix = "ASW [" .. self.hunterPrefix .. "]"
+
+    -- Rearm zone
+    if self.rearmZone and self.rearmZone ~= "" then
+        if not trigger.misc.getZone(self.rearmZone) then
+            trigger.action.outTextForCoalition(self.ownerCoalition,
+                prefix .. " WARNING: Rearm zone '" .. self.rearmZone .. "' not found in mission.", 20)
+            env.info(prefix .. " WARNING: Rearm zone '" .. self.rearmZone .. "' not found in mission.", false)
+        end
+    end
+
+    -- Rearm units (late-activated units may not be visible at startup)
+    for _, unitName in ipairs(self.rearmUnits) do
+        if not Unit.getByName(unitName) then
+            trigger.action.outTextForCoalition(self.ownerCoalition,
+                prefix .. " WARNING: Rearm unit '" .. unitName .. "' not found (late-activated? wrong name?).", 20)
+            env.info(prefix .. " WARNING: Rearm unit '" .. unitName .. "' not found.", false)
+        end
+    end
 end
 
 function OrdnanceManager:startGroupScanner()
