@@ -55,7 +55,7 @@ If loading individual source files, use this order in the DCS Mission Editor (DO
 
 - Helicopter ASW groups must have **`_asw_helo`** in their group name (configurable via `HELO_CONFIG.prefix`).
 - Fixed-wing ASW groups must have **`_asw_plane`** in their group name (configurable via `PLANE_CONFIG.prefix`).
-- Each group should be a single aircraft. Single-player is possible, but not recommended; a second player or AI copilot for the helicopters improves the experience significantly.
+- Each group should be a single aircraft. Single-player is possible, but not recommended; a second player as copilot for the helicopters improves the experience significantly.
 
 ### Coalition Setup
 
