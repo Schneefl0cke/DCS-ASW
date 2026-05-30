@@ -57,7 +57,7 @@ function HelicopterHunterManager:prepareToRecover(groupName)
 
     data.state = "preparing_recover"
     local maxSpeedKt = self.maxSpeed * 1.943844
-    self:messageToGroup(groupName, "Preparing to recover buoy. Fly near a deployed buoy.\nAlt < " .. self.maxAltitude .. "m AGL | Speed < " .. string.format("%.0f", maxSpeedKt) .. " kt | Range < " .. self.recoveryRange .. "m", 5)
+    self:messageToGroup(groupName, "Preparing to recover buoy. Fly near a deployed buoy.\nAlt < " .. self.maxAltitude .. "m AGL | Speed < " .. string.format("%.0f", maxSpeedKt) .. " kt | Range < " .. self.recoveryRange .. "m\nBoth active and dead buoys can be recovered.", 5)
     self:startPrepareMessages(groupName)
 end
 
@@ -81,15 +81,18 @@ function HelicopterHunterManager:recoverBuoy(groupName)
     local pos = unit:getPoint()
     local nearestBuoy = nil
     local nearestDist = self.recoveryRange + 1
+    local nearestIdx  = nil
 
-    for _, buoy in ipairs(self.buoys) do
-        if buoy:isActive() then
-            local dx = buoy.x - pos.x
-            local dz = buoy.z - pos.z
+    -- Scan all physically-deployed buoys (active OR depleted — both are on the water)
+    for i, buoy in ipairs(self.buoys) do
+        if buoy.active then
+            local dx   = buoy.x - pos.x
+            local dz   = buoy.z - pos.z
             local dist = math.sqrt(dx * dx + dz * dz)
             if dist < nearestDist then
                 nearestDist = dist
                 nearestBuoy = buoy
+                nearestIdx  = i
             end
         end
     end
@@ -99,9 +102,29 @@ function HelicopterHunterManager:recoverBuoy(groupName)
         return
     end
 
-    nearestBuoy:remove()
-    data.inventory = math.min(data.inventory + 1, self.maxBuoys)
-    self:messageToGroup(groupName, nearestBuoy.name .. " recovered! Inventory: " .. data.inventory .. "/" .. self.maxBuoys, 5)
+    -- Remove from the shared deployed pool
+    table.remove(self.buoys, nearestIdx)
+
+    local recoverMsg
+    if nearestBuoy.batteryDepleted then
+        -- Expired buoy: goes to expired inventory, revived at next rearm
+        nearestBuoy:remove()
+        data.expiredCount = data.expiredCount + 1
+        recoverMsg = string.format(
+            "%s recovered (battery dead — will be revived at rearm).\nExpired on board: %d | Ready: %d (%d fresh, %d saved)",
+            nearestBuoy.name, data.expiredCount,
+            data.freshCount + #data.savedBuoys, data.freshCount, #data.savedBuoys)
+    else
+        -- Active buoy: save with remaining battery, can be redeployed immediately
+        nearestBuoy:pickup()
+        data.savedBuoys[#data.savedBuoys + 1] = nearestBuoy
+        recoverMsg = string.format(
+            "%s recovered (%s battery saved).\nReady: %d (%d fresh, %d saved) | Expired: %d",
+            nearestBuoy.name, nearestBuoy:getBatteryText(),
+            data.freshCount + #data.savedBuoys, data.freshCount, #data.savedBuoys, data.expiredCount)
+    end
+
+    self:messageToGroup(groupName, recoverMsg, 8)
 
     if ASW_SOUND then
         local enemyCoalition = self.ownerCoalition == coalition.side.BLUE and coalition.side.RED or coalition.side.BLUE

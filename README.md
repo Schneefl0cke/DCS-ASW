@@ -125,7 +125,7 @@ A **green circle with text** marks every torpedo launch position, visible to all
 The submarine's own coalition sees a **blue trail** (last 3 segments) with a **heading arrow**. Status text (depth, heading, speed, targets) is displayed as coalition text messages rather than map markers.
 
 ### Sonarbuoy Position
-Sonarbuoys are shown as a **small blue circle** with the buoy name, visible to all coalitions.
+Sonarbuoys are shown as a **small blue circle** with the buoy name, visible to all coalitions. When the battery depletes, the circle and label turn **gray** with a `[DEAD]` suffix.
 
 ### Sonarbuoy Contact
 A **yellow bearing line** is drawn from the buoy outward to max detection range, labelled with bearing and confidence. Passive buoys give **bearing only** — the submarine is somewhere along that line. Cross two or more bearing lines from different buoys to triangulate a position fix. Lines auto-expire after 30 seconds.
@@ -152,17 +152,38 @@ Hunters are split into two types with separate group name prefixes:
 |---|---|
 | **Prepare to Launch Buoy** | Enter launch mode. HUD shows altitude/speed readiness. |
 | **Launch Buoy!** | Deploy a sonarbuoy at current position. |
-| **Prepare to Recover Buoy** | *(Helicopters only)* Enter recovery mode. HUD shows nearest buoy distance. |
-| **Recover Buoy!** | *(Helicopters only)* Pick up nearest buoy within 10m. Returns it to inventory. |
+| **Prepare to Recover Buoy** | *(Helicopters only)* Enter recovery mode. HUD shows nearest buoy (active or dead) and its battery state. |
+| **Recover Buoy!** | *(Helicopters only)* Pick up nearest buoy within 10m. Active buoys return with battery preserved; dead buoys go to expired inventory. |
 
-- Helicopters carry **4 buoys** by default; fixed-wing carry **8**
-- Each hunter carries **4 buoys** (configurable)
+- Helicopters carry **4 buoys** by default; fixed-wing carry **8** (configurable per type)
+- A **global reserve pool** (default 10) is shared across all hunters. Hunters draw from it when rearming. Once empty, buoys must be recovered to continue operations.
 - Buoys detect submarines every 5 seconds using a probability-based model
 - Detection probability depends on: submarine noise (speed × noise factor), distance, depth, and thermal layer
 - On detection, a **yellow bearing line** is drawn from the buoy outward (30 second duration). Bearing has ±0–30° error scaled by confidence. No range or depth — passive buoys hear direction only.
 - Triangulate by cross-referencing bearing lines from two or more buoys
 - Buoy position is marked with a blue circle **visible to both coalitions** — the submarine side can see where buoys are deployed
 - The submarine coalition receives a **warning message** when a buoy is deployed
+
+#### Sonarbuoy Battery
+
+Buoys have a configurable battery life (default **30 minutes**). When the battery runs out:
+
+- The buoy **stops detecting** but stays physically on the water
+- The F10 map marker turns **gray** with a `[DEAD]` label
+- The smoke switches from **orange** to **red**
+- The buoy can still be recovered by a helicopter
+
+Recovered buoys go into one of two inventory slots:
+
+| Recovery type | Destination | Can redeploy? |
+|---|---|---|
+| Active buoy (battery remaining) | `savedBuoys` inventory | Yes — immediately, battery resumes where it left off |
+| Depleted buoy (dead) | `expiredCount` inventory | No — must rearm first; carrier replaces battery |
+
+Rearming at the rearm zone/carrier:
+1. All expired buoys on board are **revived to full battery** (free — carrier replaces batteries)
+2. The global reserve pool tops up the hunter's rack up to `maxBuoys`
+3. If the pool is empty, only recovered/revived buoys refill the rack — a warning is shown
 
 #### Torpedo (ASW)
 
@@ -259,8 +280,8 @@ MAD specifications:
 | Command | Description |
 |---|---|
 | **Cancel** | Cancel current prepare operation |
-| **Status** | Show buoy/torpedo inventory, active counts, MAD state, current state |
-| **Rearm** | Restock buoys and torpedoes, repair dipping sonar, recharge MAD. Must be near a `rearmUnit` carrier **or** inside the `rearmZone` — both are valid. |
+| **Status** | Show buoy inventory (fresh/saved/expired), deployed counts (active/dead), torpedo inventory, MAD state, global pool size, current state |
+| **Rearm** | Revive expired buoys, top up from global pool, restock torpedoes, repair dipping sonar, recharge MAD. Must be near a `rearmUnit` carrier **or** inside the `rearmZone` — both are valid. |
 
 ---
 
@@ -535,6 +556,12 @@ PLANE_CONFIG = {
         drainPerMeter   = 0.002, -- additional drain %/sec per meter of search depth
         rechargeRate    = 0.25,  -- charge recovery %/sec when inactive
     },
+}
+
+-- 6. Sonarbuoy supply
+BUOY_CONFIG = {
+    lifetime   = 1800,  -- battery life per buoy in seconds (nil = unlimited)
+    globalPool = 10,    -- reserve buoys at the carrier, shared across all hunters
 }
 ```
 

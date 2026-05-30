@@ -123,7 +123,19 @@ local PLANE_CONFIG = {
 }
 
 -- =============================================================================
--- 6. SOUND CONFIGURATION
+-- 6. SONARBUOY SUPPLY
+-- =============================================================================
+-- lifetime:   battery life per buoy in seconds. nil = unlimited (no expiry).
+-- globalPool: extra buoys available at rearm, shared across all hunters.
+--             When the pool hits 0, hunters must recover buoys to get more.
+
+local BUOY_CONFIG = {
+    lifetime   = 1800,  -- 30 minutes per battery charge
+    globalPool = 10,    -- reserve buoys at the carrier/base
+}
+
+-- =============================================================================
+-- 7. SOUND CONFIGURATION
 -- =============================================================================
 -- Set duration to the actual length of each sound file in seconds.
 -- Set to nil to disable a sound.
@@ -188,9 +200,11 @@ local detectableObjects = {submarine}
 
 -- ===== ASW Hunter Managers =====
 -- Shared pools — both managers write here; AI/human commanders read from here.
-local sharedBuoys        = {}
-local sharedTorpedoes    = {}
+local sharedBuoys         = {}
+local sharedTorpedoes     = {}
 local sharedDippingSonars = {}
+-- Shared buoy supply: both managers draw from the same reserve when rearming.
+local globalBuoyPool      = { count = BUOY_CONFIG.globalPool }
 
 local heloManager = HelicopterHunterManager:new({
     ownerCoalition    = ASW_COALITION,
@@ -212,6 +226,8 @@ local heloManager = HelicopterHunterManager:new({
     buoys             = sharedBuoys,
     torpedoes         = sharedTorpedoes,
     dippingSonars     = sharedDippingSonars,
+    globalBuoyPool    = globalBuoyPool,
+    buoyLifetime      = BUOY_CONFIG.lifetime,
 })
 
 local planeManager = PlaneHunterManager:new({
@@ -231,6 +247,8 @@ local planeManager = PlaneHunterManager:new({
     buoys             = sharedBuoys,
     torpedoes         = sharedTorpedoes,
     madConfig         = PLANE_CONFIG.madConfig,
+    globalBuoyPool    = globalBuoyPool,
+    buoyLifetime      = BUOY_CONFIG.lifetime,
 })
 
 -- Single detection loop covering all buoys from both manager types
