@@ -43,8 +43,8 @@ local SUB_CONFIG = {
     spawnZone       = {"spawn_1", "spawn_2", "spawn_3"},  -- Trigger zone name (e.g. "Submarine_initial_position"), or a table of names for a random pick: {"zone_a", "zone_b", "zone_c"}
     startDepth      = 20,                           -- Starting depth in meters
     startSpeed      = 2,                            -- Starting speed in m/s
-    startHeading    = 270,                          -- Starting heading in degrees
-    randomizeSpawn  = false,                        -- Randomize position within zone?
+    startHeading    = 120,                          -- Starting heading in degrees
+    randomizeSpawn  = true,                        -- Randomize position within zone?
 
     -- Custom type only (ignored for diesel/ssn):
     noiseFactor     = 1.0,
