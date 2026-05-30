@@ -2,7 +2,6 @@
 
 ## High Priority
 
-- **Sonobuoy lifetime** — Buoys currently live forever. Add a configurable battery life (e.g. 30–180 min) with auto-removal on expiry. Forces continuous replanting and makes the submarine's evasion window meaningful.
 - **Diesel submarine battery system** — Diesel subs must snorkel periodically to recharge. Snorkelling forces near-surface depth with high noise factor, creating a detection window the hunter side can exploit. Core tactical loop for diesel vs SSN asymmetry.
 - **Depth charge awareness for AI** — The AI submarine commander has no reaction to nearby depth charge detonations. A loud nearby explosion should trigger an evasion response.
 

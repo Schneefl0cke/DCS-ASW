@@ -27,27 +27,35 @@ end
 -- ownerCoalition: coalition.side.BLUE or coalition.side.RED
 -- maxDetectionRange: Maximum detection range in meters (default 15000)
 -- thermalLayerDepth: Depth of thermal layer in meters. Subs below this are harder to detect (default 90)
-function Sonarbuoy:new(name, x, z, ownerCoalition, maxDetectionRange, thermalLayerDepth)
+-- batteryLife: Battery lifetime in seconds (default 1800 = 30 min). nil = unlimited.
+function Sonarbuoy:new(name, x, z, ownerCoalition, maxDetectionRange, thermalLayerDepth, batteryLife)
     local _, waterDepth = land.getSurfaceHeightWithSeabed({x = x, y = z})
     if waterDepth <= 0 then
         log("Sonarbuoy " .. name .. " deployment failed: position is over land!", ownerCoalition or coalition.side.BLUE)
         return nil
     end
 
+    local life = batteryLife  -- may be nil (unlimited)
     local obj = {
-        name = name,
-        x = x,
-        z = z,
-        ownerCoalition = ownerCoalition or coalition.side.BLUE,
+        name              = name,
+        x                 = x,
+        z                 = z,
+        ownerCoalition    = ownerCoalition or coalition.side.BLUE,
         maxDetectionRange = maxDetectionRange or 15000,
         thermalLayerDepth = thermalLayerDepth or 90,
-        active = true,
-        circleMarkId = nil,
-        textMarkId = nil,
-        contactMarkers = {},
-        lastSmokeTime = 0
+        active            = true,
+        circleMarkId      = nil,
+        textMarkId        = nil,
+        contactMarkers    = {},
+        lastSmokeTime     = 0,
+        -- battery
+        batteryLife       = life,
+        batteryRemaining  = life,   -- seconds remaining (nil = unlimited)
+        deployedAt        = nil,    -- set on deploy/redeploy
+        batteryDepleted   = false,
     }
     setmetatable(obj, Sonarbuoy)
+    obj.deployedAt = timer.getTime()
     obj:markOwnPosition()
     obj:deploySmoke()
     log("Sonarbuoy " .. name .. " deployed", obj.ownerCoalition)
@@ -60,55 +68,94 @@ function Sonarbuoy:new(name, x, z, ownerCoalition, maxDetectionRange, thermalLay
 end
 
 -- Deploy from a DCS unit's current position
-function Sonarbuoy:newFromUnit(name, unit, ownerCoalition, maxDetectionRange, thermalLayerDepth)
+function Sonarbuoy:newFromUnit(name, unit, ownerCoalition, maxDetectionRange, thermalLayerDepth, batteryLife)
     local pos = unit:getPoint()
-    return Sonarbuoy:new(name, pos.x, pos.z, ownerCoalition, maxDetectionRange, thermalLayerDepth)
+    return Sonarbuoy:new(name, pos.x, pos.z, ownerCoalition, maxDetectionRange, thermalLayerDepth, batteryLife)
 end
 
 -- Deploy from a trigger zone
-function Sonarbuoy:newFromZone(name, zoneName, ownerCoalition, maxDetectionRange, thermalLayerDepth)
+function Sonarbuoy:newFromZone(name, zoneName, ownerCoalition, maxDetectionRange, thermalLayerDepth, batteryLife)
     local zone = trigger.misc.getZone(zoneName)
     if not zone then
         trigger.action.outText("SONARBUOY ERROR: Trigger zone '" .. zoneName .. "' could not be found!", 10)
         env.info("SONARBUOY ERROR: Trigger zone '" .. zoneName .. "' could not be found!", false)
         return nil
     end
-    return Sonarbuoy:new(name, zone.point.x, zone.point.z, ownerCoalition, maxDetectionRange, thermalLayerDepth)
+    return Sonarbuoy:new(name, zone.point.x, zone.point.z, ownerCoalition, maxDetectionRange, thermalLayerDepth, batteryLife)
 end
 
--- Place orange smoke at the buoy location
+-- Deploy smoke at the buoy location. Orange = active, Red = depleted.
 function Sonarbuoy:deploySmoke()
     local point = {x = self.x, y = 0, z = self.z}
-    trigger.action.smoke(point, trigger.smokeColor.Orange)
+    local color = self.batteryDepleted and trigger.smokeColor.Red or trigger.smokeColor.Orange
+    trigger.action.smoke(point, color)
     self.lastSmokeTime = timer.getTime()
 end
 
--- Redeploy smoke if it has expired (lasts ~300 seconds)
+-- Refresh smoke if it has expired (~300 seconds). Works for active and depleted buoys.
 function Sonarbuoy:refreshSmoke()
     if not self.active then return end
-    local currentTime = timer.getTime()
-    if currentTime - self.lastSmokeTime >= 300 then
+    if timer.getTime() - self.lastSmokeTime >= 300 then
         self:deploySmoke()
     end
 end
 
--- Mark buoy position on F10 map (visible to all)
-function Sonarbuoy:markOwnPosition()
-    local point = {x = self.x, y = 0, z = self.z}
-    local blue = {0, 0, 1, 1}
+-- ===== BATTERY SYSTEM =====
 
-    self.circleMarkId = nextBuoyMarkId()
-    trigger.action.circleToAll(-1, self.circleMarkId, point, 150, blue, {0, 0, 1, 0.3}, 1, true)
-
-    local textPoint = {x = self.x + 200, y = 0, z = self.z}
-    self.textMarkId = nextBuoyMarkId()
-    trigger.action.textToAll(-1, self.textMarkId, textPoint, blue, {0, 0, 0, 0}, 10, true, self.name)
+-- Returns whether this buoy can currently detect submarines.
+function Sonarbuoy:canDetect()
+    return self.active and not self.batteryDepleted
 end
 
--- Remove the buoy
-function Sonarbuoy:remove()
+-- Returns a human-readable battery status string.
+function Sonarbuoy:getBatteryText()
+    if self.batteryLife == nil then return "unlimited" end
+    if self.batteryDepleted then return "DEPLETED" end
+    local remaining
+    if self.deployedAt then
+        remaining = math.max(0, self.batteryRemaining - (timer.getTime() - self.deployedAt))
+    else
+        remaining = self.batteryRemaining or 0
+    end
+    return string.format("%d:%02d", math.floor(remaining / 60), math.floor(remaining % 60))
+end
+
+-- Called each detection cycle. Decrements battery and expires the buoy if empty.
+function Sonarbuoy:tickBattery()
     if not self.active then return end
-    self.active = false
+    self:refreshSmoke()
+    if self.batteryLife == nil or self.batteryDepleted or not self.deployedAt then return end
+    local elapsed = timer.getTime() - self.deployedAt
+    if elapsed >= self.batteryRemaining then
+        self:expire()
+    end
+end
+
+-- Battery reached zero: stop detecting, change visuals to gray/red.
+function Sonarbuoy:expire()
+    self.batteryDepleted = true
+    self:clearContactMarkers()
+
+    -- Redraw map markers in gray
+    if self.circleMarkId then trigger.action.removeMark(self.circleMarkId) end
+    if self.textMarkId  then trigger.action.removeMark(self.textMarkId)  end
+    local point     = {x = self.x,       y = 0, z = self.z}
+    local textPoint = {x = self.x + 200, y = 0, z = self.z}
+    local gray      = {0.5, 0.5, 0.5, 1}
+    self.circleMarkId = nextBuoyMarkId()
+    trigger.action.circleToAll(-1, self.circleMarkId, point, 150, gray, {0.5, 0.5, 0.5, 0.3}, 1, true)
+    self.textMarkId = nextBuoyMarkId()
+    trigger.action.textToAll(-1, self.textMarkId, textPoint, gray, {0, 0, 0, 0}, 10, true, self.name .. " [DEAD]")
+
+    -- Switch to red smoke
+    trigger.action.smoke(point, trigger.smokeColor.Red)
+    self.lastSmokeTime = timer.getTime()
+
+    log(self.name .. " battery depleted — buoy dead", self.ownerCoalition)
+end
+
+-- Remove all map presence (markers and contact lines). Does not set active = false.
+function Sonarbuoy:clearMapPresence()
     if self.circleMarkId then
         trigger.action.removeMark(self.circleMarkId)
         self.circleMarkId = nil
@@ -118,20 +165,88 @@ function Sonarbuoy:remove()
         self.textMarkId = nil
     end
     self:clearContactMarkers()
+end
+
+-- Permanently remove the buoy from the map (discard, not recovery).
+function Sonarbuoy:remove()
+    if not self.active then return end
+    self.active = false
+    self:clearMapPresence()
     log("Sonarbuoy " .. self.name .. " removed", self.ownerCoalition)
+end
+
+-- Recover the buoy: save remaining battery, clear map presence.
+-- The buoy object is returned to the hunter's saved inventory.
+-- Does NOT remove it from any external table — caller is responsible.
+function Sonarbuoy:pickup()
+    if not self.active then return end
+    if not self.batteryDepleted and self.deployedAt then
+        local elapsed = timer.getTime() - self.deployedAt
+        self.batteryRemaining = math.max(0, self.batteryRemaining - elapsed)
+    end
+    self.deployedAt = nil
+    self.active = false
+    self:clearMapPresence()
+end
+
+-- Redeploy a previously picked-up buoy at a new position, resuming its saved battery.
+-- Returns true on success, false + reason string on failure.
+function Sonarbuoy:redeploy(x, z)
+    local _, waterDepth = land.getSurfaceHeightWithSeabed({x = x, y = z})
+    if waterDepth <= 0 then
+        return false, "Position is over land"
+    end
+    self.x = x
+    self.z = z
+    self.active = true
+    self.deployedAt = timer.getTime()
+    self:markOwnPosition()
+    self:deploySmoke()
+
+    if self.batteryLife then
+        log(string.format("%s redeployed (%s battery remaining)", self.name, self:getBatteryText()), self.ownerCoalition)
+    else
+        log(self.name .. " redeployed", self.ownerCoalition)
+    end
+
+    local enemyCoalition = self.ownerCoalition == coalition.side.BLUE and coalition.side.RED or coalition.side.BLUE
+    trigger.action.outTextForCoalition(enemyCoalition, "WARNING: Enemy sonarbuoy detected in the water!", 10, false)
+
+    return true
+end
+
+-- Reset to full battery (called when rearming revives an expired buoy).
+function Sonarbuoy:resetBattery()
+    self.batteryRemaining = self.batteryLife
+    self.batteryDepleted  = false
+    self.deployedAt       = nil
 end
 
 function Sonarbuoy:isActive()
     return self.active
 end
 
--- Detect submarines from a table of VirtualSubmarine instances
--- Returns a table of detected contacts: {x, z, confidence, subName}
-function Sonarbuoy:detect(submarines)
-    if not self.active then return {} end
+-- ===== POSITION MARKER =====
 
-    -- Refresh smoke if expired
-    self:refreshSmoke()
+-- Mark buoy position on F10 map (visible to all coalitions).
+function Sonarbuoy:markOwnPosition()
+    local point     = {x = self.x,       y = 0, z = self.z}
+    local textPoint = {x = self.x + 200, y = 0, z = self.z}
+    local blue      = {0, 0, 1, 1}
+
+    self.circleMarkId = nextBuoyMarkId()
+    trigger.action.circleToAll(-1, self.circleMarkId, point, 150, blue, {0, 0, 1, 0.3}, 1, true)
+
+    self.textMarkId = nextBuoyMarkId()
+    trigger.action.textToAll(-1, self.textMarkId, textPoint, blue, {0, 0, 0, 0}, 10, true, self.name)
+end
+
+-- ===== DETECTION =====
+
+-- Detect submarines from a table of VirtualSubmarine instances.
+-- Returns a table of detected contacts: {bearing, confidence, subName, buoyName}
+function Sonarbuoy:detect(submarines)
+    if not self:canDetect() then return {} end
 
     local contacts = {}
 

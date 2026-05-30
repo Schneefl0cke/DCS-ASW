@@ -32,6 +32,8 @@ end
 --   buoys:            shared buoy pool table (default: new empty table)
 --   torpedoes:        shared torpedo pool table (default: new empty table)
 --   dippingSonars:    shared dipping sonar pool table (default: new empty table)
+--   globalBuoyPool:   shared {count=N} table for mission-wide buoy reserve
+--   buoyLifetime:     battery life in seconds per buoy (nil = unlimited)
 function OrdnanceManager:new(config)
     local obj = {
         ownerCoalition    = config.ownerCoalition or coalition.side.BLUE,
@@ -53,6 +55,8 @@ function OrdnanceManager:new(config)
         maxDepthCharges   = config.maxDepthCharges or 0,
         dcMaxAltitude     = config.dcMaxAltitude or 500,
         dcMaxSpeed        = config.dcMaxSpeed or 200,
+        globalBuoyPool    = config.globalBuoyPool or {count = 0},
+        buoyLifetime      = config.buoyLifetime,  -- nil = unlimited
         groupData         = {},
         buoyIdCounter     = 0,
         torpedoIdCounter  = 0,
@@ -140,7 +144,9 @@ function OrdnanceManager:initGroup(groupName)
 
     self.trackedGroups[groupName] = true
     self.groupData[groupName] = {
-        inventory         = self.maxBuoys,
+        freshCount        = self.maxBuoys,  -- fresh buoys ready to deploy
+        savedBuoys        = {},             -- recovered active buoys with preserved battery
+        expiredCount      = 0,              -- recovered depleted buoys (need rearm to revive)
         torpedoInventory  = self.maxTorpedoes,
         torpedoDepth      = 100,
         dcInventory       = self.maxDepthCharges,
@@ -261,14 +267,31 @@ function OrdnanceManager:prepareToLaunch(groupName)
         return
     end
 
-    if data.inventory <= 0 then
-        self:messageToGroup(groupName, "No buoys remaining! Return to rearm.", 5)
+    local deployable = data.freshCount + #data.savedBuoys
+    if deployable <= 0 then
+        local hint = data.expiredCount > 0
+            and string.format(" (%d expired buoys on board — rearm to revive)", data.expiredCount)
+            or ""
+        self:messageToGroup(groupName, "No buoys remaining! Return to rearm zone." .. hint, 5)
         return
     end
 
     data.state = "preparing_launch"
     local maxSpeedKt = self.maxSpeed * 1.943844
-    self:messageToGroup(groupName, "Preparing to launch buoy. Get into position.\nAlt < " .. self.maxAltitude .. "m AGL | Speed < " .. string.format("%.0f", maxSpeedKt) .. " kt", 5)
+
+    local buoyInfo
+    if #data.savedBuoys > 0 then
+        local saved = data.savedBuoys[#data.savedBuoys]
+        buoyInfo = "saved buoy (" .. saved:getBatteryText() .. " remaining)"
+    elseif self.buoyLifetime then
+        buoyInfo = string.format("fresh buoy (%d min battery)", math.floor(self.buoyLifetime / 60))
+    else
+        buoyInfo = "fresh buoy"
+    end
+
+    self:messageToGroup(groupName, string.format(
+        "Preparing to launch buoy. Get into position.\nNext: %s\nAlt < %dm AGL | Speed < %.0f kt",
+        buoyInfo, self.maxAltitude, maxSpeedKt), 5)
     self:startPrepareMessages(groupName)
 end
 
@@ -295,21 +318,44 @@ function OrdnanceManager:launchBuoy(groupName)
         return
     end
 
-    self.buoyIdCounter = self.buoyIdCounter + 1
-    local buoyName = groupName .. "-Buoy-" .. self.buoyIdCounter
-    local buoy = Sonarbuoy:new(buoyName, pos.x, pos.z, self.ownerCoalition, nil, self.thermalLayerDepth)
-
-    if buoy then
-        self.buoys[#self.buoys + 1] = buoy
-        data.inventory = data.inventory - 1
-        self:messageToGroup(groupName, "Buoy deployed! Remaining: " .. data.inventory .. "/" .. self.maxBuoys, 5)
-
-        if ASW_SOUND then
-            local enemyCoalition = self.ownerCoalition == coalition.side.BLUE and coalition.side.RED or coalition.side.BLUE
-            ASW_SOUND:playOnce(groupName, "buoy_splash")
-            ASW_SOUND:playForCoalition(self.ownerCoalition, "buoy_splash")
-            ASW_SOUND:playForCoalition(enemyCoalition, "buoy_splash")
+    local buoy
+    if #data.savedBuoys > 0 then
+        -- Redeploy a recovered buoy with its preserved battery
+        local savedBuoy = table.remove(data.savedBuoys, #data.savedBuoys)
+        local ok, err = savedBuoy:redeploy(pos.x, pos.z)
+        if not ok then
+            table.insert(data.savedBuoys, savedBuoy)
+            self:messageToGroup(groupName, "Cannot deploy: " .. (err or "unknown error"), 5)
+            self:stopPrepareMessages(groupName)
+            data.state = "idle"
+            return
         end
+        buoy = savedBuoy
+        self.buoys[#self.buoys + 1] = buoy
+    else
+        -- Deploy a fresh buoy (draws from freshCount)
+        self.buoyIdCounter = self.buoyIdCounter + 1
+        local buoyName = groupName .. "-Buoy-" .. self.buoyIdCounter
+        buoy = Sonarbuoy:new(buoyName, pos.x, pos.z, self.ownerCoalition, nil, self.thermalLayerDepth, self.buoyLifetime)
+        if not buoy then
+            self:stopPrepareMessages(groupName)
+            data.state = "idle"
+            return
+        end
+        self.buoys[#self.buoys + 1] = buoy
+        data.freshCount = data.freshCount - 1
+    end
+
+    local deployable = data.freshCount + #data.savedBuoys
+    self:messageToGroup(groupName, string.format(
+        "Buoy deployed! Ready: %d (%d fresh, %d saved) | Expired: %d | Pool: %d",
+        deployable, data.freshCount, #data.savedBuoys, data.expiredCount, self.globalBuoyPool.count), 5)
+
+    if ASW_SOUND then
+        local enemyCoalition = self.ownerCoalition == coalition.side.BLUE and coalition.side.RED or coalition.side.BLUE
+        ASW_SOUND:playOnce(groupName, "buoy_splash")
+        ASW_SOUND:playForCoalition(self.ownerCoalition, "buoy_splash")
+        ASW_SOUND:playForCoalition(enemyCoalition, "buoy_splash")
     end
 
     self:stopPrepareMessages(groupName)
@@ -411,9 +457,14 @@ function OrdnanceManager:showStatus(groupName)
     local data = self.groupData[groupName]
     if not data then return end
 
-    local activeBuoys = 0
+    local deployedActive = 0
+    local deployedDead   = 0
     for _, buoy in ipairs(self.buoys) do
-        if buoy:isActive() then activeBuoys = activeBuoys + 1 end
+        if buoy.active then
+            if buoy.batteryDepleted then deployedDead   = deployedDead   + 1
+            else                         deployedActive = deployedActive + 1
+            end
+        end
     end
 
     local activeTorpedoes = 0
@@ -421,9 +472,15 @@ function OrdnanceManager:showStatus(groupName)
         if torpedo:isActive() then activeTorpedoes = activeTorpedoes + 1 end
     end
 
+    local deployable = data.freshCount + #data.savedBuoys
     local msg = string.format(
-        "=== ASW Status ===\nBuoys: %d/%d | Active (all): %d\nTorpedoes: %d/%d | Active (all): %d\nTorpedo depth: %dm\nState: %s",
-        data.inventory, self.maxBuoys, activeBuoys,
+        "=== ASW Status ===\n" ..
+        "Buoys: %d ready (%d fresh, %d saved) | %d expired | Pool: %d\n" ..
+        "Deployed: %d active, %d dead\n" ..
+        "Torpedoes: %d/%d | Active: %d | Depth: %dm\n" ..
+        "State: %s",
+        deployable, data.freshCount, #data.savedBuoys, data.expiredCount, self.globalBuoyPool.count,
+        deployedActive, deployedDead,
         data.torpedoInventory, self.maxTorpedoes, activeTorpedoes,
         data.torpedoDepth, data.state)
 
@@ -478,13 +535,25 @@ function OrdnanceManager:rearmAll(groupName)
         return
     end
 
-    data.inventory = self.maxBuoys
+    -- Revive expired recovered buoys (carrier replaces batteries — free)
+    local revived = data.expiredCount
+    data.freshCount  = data.freshCount + revived
+    data.expiredCount = 0
+
+    -- Top up from global pool up to maxBuoys
+    local space    = self.maxBuoys - data.freshCount - #data.savedBuoys
+    local fromPool = math.min(math.max(0, space), self.globalBuoyPool.count)
+    if fromPool > 0 then
+        data.freshCount              = data.freshCount + fromPool
+        self.globalBuoyPool.count    = self.globalBuoyPool.count - fromPool
+    end
+
     data.torpedoInventory = self.maxTorpedoes
 
     local extras = ""
     if data.dippingSonar and not data.dippingSonar.operational then
         data.dippingSonar:repair()
-        extras = extras .. " | Dipping sonar: REPAIRED"
+        extras = extras .. " | Sonar: REPAIRED"
     end
     if data.dcInventory ~= nil and self.maxDepthCharges > 0 then
         data.dcInventory = self.maxDepthCharges
@@ -495,9 +564,12 @@ function OrdnanceManager:rearmAll(groupName)
         extras = extras .. " | MAD: recharged"
     end
 
+    local deployable = data.freshCount + #data.savedBuoys
+    local poolNote   = self.globalBuoyPool.count == 0 and " (pool empty — recover buoys!)" or ""
     self:messageToGroup(groupName, string.format(
-        "Rearmed! Buoys: %d/%d | Torpedoes: %d/%d%s",
-        data.inventory, self.maxBuoys, data.torpedoInventory, self.maxTorpedoes, extras), 5)
+        "Rearmed!\nBuoys: %d ready (%d fresh, %d saved) | %d revived | Pool: %d%s\nTorpedoes: %d/%d%s",
+        deployable, data.freshCount, #data.savedBuoys, revived, self.globalBuoyPool.count, poolNote,
+        data.torpedoInventory, self.maxTorpedoes, extras), 8)
 end
 
 -- ===== PREPARE MODE HUD =====
@@ -528,24 +600,28 @@ function OrdnanceManager:startPrepareMessages(groupName)
 
         if d.state == "preparing_recover" then
             local pos = unit:getPoint()
-            local nearestDist = nil
-            local nearestName = nil
+            local nearestDist  = nil
+            local nearestName  = nil
+            local nearestState = nil
+            -- Show both powered and depleted buoys — both are recoverable
             for _, buoy in ipairs(self.buoys) do
-                if buoy:isActive() then
-                    local dx = buoy.x - pos.x
-                    local dz = buoy.z - pos.z
+                if buoy.active then
+                    local dx   = buoy.x - pos.x
+                    local dz   = buoy.z - pos.z
                     local dist = math.sqrt(dx * dx + dz * dz)
                     if not nearestDist or dist < nearestDist then
-                        nearestDist = dist
-                        nearestName = buoy.name
+                        nearestDist  = dist
+                        nearestName  = buoy.name
+                        nearestState = buoy.batteryDepleted and "DEAD" or buoy:getBatteryText()
                     end
                 end
             end
             if nearestDist then
                 local rangeOk = nearestDist <= self.recoveryRange
-                msg = msg .. string.format("\nNearest buoy: %s (%.0fm) %s", nearestName, nearestDist, rangeOk and "IN RANGE" or "TOO FAR")
+                msg = msg .. string.format("\nNearest: %s [%s] (%.0fm) %s",
+                    nearestName, nearestState, nearestDist, rangeOk and "IN RANGE" or "TOO FAR")
             else
-                msg = msg .. "\nNo active buoys deployed!"
+                msg = msg .. "\nNo buoys deployed!"
             end
         end
 
@@ -705,7 +781,8 @@ end
 function OrdnanceManager:startDetectionLoop()
     local function detect()
         for _, buoy in ipairs(self.buoys) do
-            if buoy:isActive() then
+            buoy:tickBattery()
+            if buoy:canDetect() then
                 buoy:detect(self.submarines)
             end
         end
