@@ -63,7 +63,11 @@ function VirtualSubmarine:new(name, x, z, depth, speed, heading, noiseFactor, ma
         sonarRange = 15000,          -- passive sonar range in meters (default diesel)
         sonarThermalPenalty = 0.3,    -- detection multiplier when below thermal layer (diesel)
         contactMarkers = {},          -- per-unit markers for detected ships
-        lastSonarScanTime = 0
+        lastSonarScanTime = 0,
+        -- torpedo range ring (20.58 m/s × 300s battery = 6174m, matches SubmarineTorpedo)
+        torpedoRange = 6174,
+        torpedoRangeMarkId = nil,
+        torpedoRangeLabelId = nil
     }
     setmetatable(obj, VirtualSubmarine)
     return obj
@@ -313,6 +317,28 @@ function VirtualSubmarine:markOwnPosition()
         blue, 1, true)
     self.arrowMarkIds[#self.arrowMarkIds + 1] = ah2Id
 
+    -- Torpedo range ring (coalition only — shows maximum straight-line torpedo reach)
+    if self.torpedoRangeMarkId then
+        trigger.action.removeMark(self.torpedoRangeMarkId)
+    end
+    if self.torpedoRangeLabelId then
+        trigger.action.removeMark(self.torpedoRangeLabelId)
+    end
+
+    local green = {0, 0.8, 0, 1}
+    self.torpedoRangeMarkId = nextSubMarkId()
+    trigger.action.circleToAll(coalitionId, self.torpedoRangeMarkId,
+        {x = self.x, y = 0, z = self.z},
+        self.torpedoRange,
+        green, {0, 0.8, 0, 0.04}, 1, true)
+
+    self.torpedoRangeLabelId = nextSubMarkId()
+    trigger.action.textToAll(coalitionId, self.torpedoRangeLabelId,
+        {x = self.x + self.torpedoRange + 300, y = 0, z = self.z},
+        green, {0, 0, 0, 0}, 10, true,
+        string.format("Torp range ~%.1f km | %d/%d",
+            self.torpedoRange / 1000, self.torpedoCount, self.maxTorpedoes))
+
     -- Log status text to coalition
     local layerStatus = self.belowThermalLayer and "BELOW layer" or "ABOVE layer"
     local hdgText = string.format("%.0f", self.heading)
@@ -372,6 +398,14 @@ function VirtualSubmarine:destroy()
         trigger.action.removeMark(id)
     end
     self.arrowMarkIds = {}
+    if self.torpedoRangeMarkId then
+        trigger.action.removeMark(self.torpedoRangeMarkId)
+        self.torpedoRangeMarkId = nil
+    end
+    if self.torpedoRangeLabelId then
+        trigger.action.removeMark(self.torpedoRangeLabelId)
+        self.torpedoRangeLabelId = nil
+    end
     self:clearContactMarkers()
     log(self.name .. " has been sunk!", self.ownerCoalition)
     debugMessage(self.name .. " has been sunk at X=" .. string.format("%.1f", self.x) .. " Z=" .. string.format("%.1f", self.z) .. " depth=" .. string.format("%.1f", self.depth) .. "m")

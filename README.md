@@ -34,7 +34,7 @@ Load scripts in this order in the DCS Mission Editor (DO ONCE triggers):
 
 | Zone Name | Purpose |
 |---|---|
-| `Submarine_initial_position` | Spawn location for the submarine (configurable in `asw_config.lua`) |
+| `Submarine_initial_position` | Default spawn location for the submarine. Can be a single zone name or a **table of zone names** — one is chosen at random each mission start for replayability (configurable in `asw_config.lua`) |
 | `ASW_Hunter_Rearming` | Circle zone where ASW aircraft land/hover to rearm. Used alongside `rearmUnits` — both are checked. |
 | `patrol_1`, `patrol_2`, ... | Patrol waypoints for AI submarine commander (only needed if using AI) |
 
@@ -124,6 +124,9 @@ A **green circle with text** marks every torpedo launch position, visible to all
 
 ### Submarine Position
 The submarine's own coalition sees a **blue trail** (last 3 segments) with a **heading arrow**. Status text (depth, heading, speed, targets) is displayed as coalition text messages rather than map markers.
+
+### Torpedo Range Ring
+A **green circle** centered on the submarine shows the maximum straight-line torpedo reach (speed × battery life ≈ 6.2 km). A label at the ring's north edge shows the range in km and current torpedo count (`2/6`). The ring updates every 5 seconds with the position markers and is removed when the submarine is sunk.
 
 ### Sonarbuoy Position
 Sonarbuoys are shown as a **small blue circle** with the buoy name, visible to all coalitions. When the battery depletes, the circle and label turn **gray** with a `[DEAD]` suffix.
@@ -509,7 +512,7 @@ THERMAL_LAYER_DEPTH = 90
 SUB_CONFIG = {
     type            = "diesel",                     -- "diesel", "ssn", or "custom"
     name            = "Kursk",
-    spawnZone       = "Submarine_initial_position",
+    spawnZone       = "Submarine_initial_position",  -- or {"zone_a", "zone_b", "zone_c"} for random pick
     startDepth      = 60,
     startSpeed      = 8,
     startHeading    = 270,
