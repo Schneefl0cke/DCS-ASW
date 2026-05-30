@@ -17,6 +17,7 @@
 
 ## Hunter Improvements
 
+- **Dipping sonar blocked near surface ships** — Prevent lowering the sonar cable when a surface ship (friendly or enemy) is within a minimum radius (e.g. 200m). Tangling or collision risk. Show a warning message with the offending ship's name and distance so the pilot knows to reposition.
 - **Depth charge spacing in seconds** — Replace the current metre-based spacing options with a time-based interval (e.g. 1s, 2s, 3s, 5s between charges). More intuitive for the pilot since actual spread depends on aircraft speed anyway; seconds let the player reason about pattern size relative to their current groundspeed.
 - **Active sonobuoy variant (DICASS)** — Premium buoy type that gives bearing and range (full fix) but immediately alerts the submarine coalition with the ping location. Tactical trade-off: spend a limited resource for a precision fix at the cost of warning the target.
 - **Track correlation display** — When two bearing lines from different buoys intersect, mark the crossing point on the F10 map. Either automatic (when two recent lines overlap) or a manual "mark intersection" command for the hunter side.
