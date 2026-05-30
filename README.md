@@ -47,7 +47,7 @@ If loading individual source files, use this order in the DCS Mission Editor (DO
 
 | Zone Name | Purpose |
 |---|---|
-| `Submarine_initial_position` | Spawn location for the submarine (configurable in `asw_config.lua`) |
+| `Submarine_initial_position` | Default spawn location for the submarine. Can be a single zone name or a **table of zone names** — one is chosen at random each mission start for replayability (configurable in `asw_config.lua`) |
 | `ASW_Hunter_Rearming` | Circle zone where ASW aircraft land/hover to rearm. Used alongside `rearmUnits` — both are checked. |
 | `patrol_1`, `patrol_2`, ... | Patrol waypoints for AI submarine commander (only needed if using AI) |
 
@@ -94,6 +94,7 @@ The sound scheduler registers these sound names:
 | `noisemaker_loop` | Noise maker active (looping) |
 | `warning_torpedo` | Submarine side warned of ASW torpedo / depth charges |
 | `warning_sonar` | Submarine side warned of active sonar ping |
+| `mad_buzz` | Audible tone played to the pilot while MAD is actively scanning (every 2s) |
 
 ---
 
@@ -136,6 +137,9 @@ A **green circle with text** marks every torpedo launch position, visible to all
 
 ### Submarine Position
 The submarine's own coalition sees a **blue trail** (last 3 segments) with a **heading arrow**. Status text (depth, heading, speed, targets) is displayed as coalition text messages rather than map markers.
+
+### Torpedo Range Ring
+A **green circle** centered on the submarine shows the maximum straight-line torpedo reach (speed × battery life ≈ 6.2 km). A label at the ring's north edge shows the range in km and current torpedo count (`2/6`). The ring updates every 5 seconds with the position markers and is removed when the submarine is sunk.
 
 ### Sonarbuoy Position
 Sonarbuoys are shown as a **small blue circle** with the buoy name, visible to all coalitions. When the battery depletes, the circle and label turn **gray** with a `[DEAD]` suffix.
@@ -311,12 +315,26 @@ Available as coalition menu for the submarine's coalition.
 | **Change Heading** | Adjust heading: ±5°, ±10°, ±25°, ±50°, ±90° (applied to target heading) |
 | **Set Heading** | Set absolute heading: N, NE, E, SE, S, SW, W, NW |
 | **Change Speed** | Adjust speed: ±1, ±2, ±5, ±10 m/s (applied to target speed) |
+| **Set Speed** | Jump to an absolute speed preset — Stop, Silent, 25%, 50%, 75%, Full Speed (rounded to whole m/s, computed from `maxSpeed`) |
 | **Change Depth** | Adjust depth: ±10m, ±25m, ±50m, ±100m |
-| **Dive (max depth)** | Go to maximum operating depth |
-| **Periscope Depth** | Rise to 20m (required for torpedo launch) |
-| **Level (hold depth)** | Hold current depth |
+| **Dive (max depth)** | Go to maximum operating depth (inside Change Depth) |
+| **Periscope Depth** | Rise to 20m — inside Change Depth (required for torpedo launch) |
+| **Level (hold depth)** | Hold current depth — inside Change Depth |
+| **Set Depth** | Jump to an absolute depth preset — see below |
 
 The status display shows both current and target values: `Hdg: 270° -> 315° | Spd: 3.5 -> 8 m/s`
+
+**Set Depth presets** (computed at mission start from the configured thermal layer and submarine type):
+
+| Entry | Depth |
+|---|---|
+| Periscope | 20m (fixed) |
+| Above Layer | `thermalLayerDepth − 10` (e.g. 80m if layer is 90m) |
+| Below Layer | `thermalLayerDepth + 10` (e.g. 100m if layer is 90m) |
+| Fixed steps | 150m, 200m, 250m … up to `maxDepth` in 50m increments |
+| Max (if needed) | `maxDepth` added as a labelled entry when it doesn't fall on a 50m step |
+
+Steps that would duplicate an Above/Below Layer entry are skipped automatically.
 
 #### Torpedoes (Anti-Ship)
 
@@ -415,8 +433,9 @@ local AI_CONFIG = {
 **PATROL** → **ATTACK** → **EVADE** → **PATROL**
 
 - **PATROL**: Visits waypoint zones in random order (default) or sequentially in the order defined (`randomPatrol = false`), looping back to the first zone on completion. Uses passive sonar to scan for enemy ships. Moves at configured patrol speed and depth. If `enableAttack = false`, detected ships are ignored and the sub stays in patrol.
-- **ATTACK**: Ship detected within attack range → turns toward target, rises to periscope depth, approaches, fires 2-torpedo salvo, then immediately dives deep and evades to a random waypoint.
-- **EVADE (buoy trigger)**: Sonarbuoy deployed within 7 km → dives to max depth, heads away from buoy (±90° randomized cone), reduces speed. Conserves noise makers for torpedo threats.
+- **ATTACK**: Ship detected within attack range → turns toward target, rises to periscope depth, approaches, fires 2-torpedo salvo, then pre-deploys a noise maker (30s delay) to mask the retreat, dives deep, and evades to a random waypoint.
+- **EVADE (buoy trigger)**: Sonarbuoy deployed within 7 km → dives to max depth, heads away from buoy (±90° randomized cone), reduces speed. Conserves noise makers for higher-priority threats.
+- **EVADE (depth charge trigger)**: Depth charge detonates within 1.5 km → sharp random heading change (±90–150°), dives to or below the thermal layer, sprints away briefly, deploys noise maker (30s delay aggressive / 60s cautious). Has a 20-second cooldown so a full charge pattern only triggers one reaction. Interrupts buoy/sonar evasion but not torpedo evasion.
 - **EVADE (dipping sonar trigger)**: Active dipping sonar detected within 10 km → dives to max depth, heads away from helicopter (±90° randomized cone), deploys noise maker with 60s delay to confuse the active sonar. Higher priority than passive buoys.
 - **EVADE (torpedo trigger — highest priority)**: ASW torpedo detected within 10 km → immediately deploys noise maker, random depth change (deep or 100m shallower), goes silent or crawls based on profile, random heading. Re-deploys noise makers if torpedo persists. Resets evasion timer.
 
@@ -506,7 +525,7 @@ THERMAL_LAYER_DEPTH = 90
 SUB_CONFIG = {
     type            = "diesel",                     -- "diesel", "ssn", or "custom"
     name            = "Kursk",
-    spawnZone       = "Submarine_initial_position",
+    spawnZone       = "Submarine_initial_position",  -- or {"zone_a", "zone_b", "zone_c"} for random pick
     startDepth      = 60,
     startSpeed      = 8,
     startHeading    = 270,

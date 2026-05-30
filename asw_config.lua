@@ -40,11 +40,11 @@ local THERMAL_LAYER_DEPTH = 90  -- meters
 local SUB_CONFIG = {
     type            = "ssn",                     -- "diesel", "ssn", or "custom"
     name            = "Red Dragon",                      -- Display name
-    spawnZone       = "Submarine_initial_position",  -- Trigger zone name
+    spawnZone       = {"spawn_1", "spawn_2", "spawn_3"},  -- Trigger zone name (e.g. "Submarine_initial_position"), or a table of names for a random pick: {"zone_a", "zone_b", "zone_c"}
     startDepth      = 20,                           -- Starting depth in meters
     startSpeed      = 2,                            -- Starting speed in m/s
-    startHeading    = 270,                          -- Starting heading in degrees
-    randomizeSpawn  = false,                        -- Randomize position within zone?
+    startHeading    = 120,                          -- Starting heading in degrees
+    randomizeSpawn  = true,                        -- Randomize position within zone?
 
     -- Custom type only (ignored for diesel/ssn):
     noiseFactor     = 1.0,
@@ -153,6 +153,7 @@ local SOUND_CONFIG = {
     noisemaker_loop = { file = "sounds/noisemaker_active.ogg",  duration = 3,   priority = SoundScheduler.PRIORITY.LOW },
     warning_torpedo = { file = "sounds/warning_torpedo.ogg",   duration = 3,   priority = SoundScheduler.PRIORITY.ALERT },
     warning_sonar   = { file = "sounds/warning_sonar.ogg",     duration = 2,   priority = SoundScheduler.PRIORITY.ALERT },
+    mad_buzz        = { file = "sounds/buzz.ogg",              duration = 3,   priority = SoundScheduler.PRIORITY.LOW },
 }
 
 -- =============================================================================
@@ -170,21 +171,35 @@ end
 -- Make scheduler globally accessible for other modules
 ASW_SOUND = soundScheduler
 
+-- Shared depth-charge detonation log — DepthCharge writes here, AI reads it
+ASW_DC_DETONATIONS = {}
+
 -- ===== Create Submarine =====
+-- Resolve spawn zone: if spawnZone is a table, pick one at random.
+local function resolveSpawnZone(cfg)
+    if type(cfg.spawnZone) == "table" and #cfg.spawnZone > 0 then
+        local chosen = cfg.spawnZone[math.random(#cfg.spawnZone)]
+        debugMessage("ASW: submarine spawn zone randomly chosen: " .. chosen)
+        return chosen
+    end
+    return cfg.spawnZone
+end
+
+local spawnZone = resolveSpawnZone(SUB_CONFIG)
 local submarine
 if SUB_CONFIG.type == "diesel" then
     submarine = VirtualSubmarine:newDieselFromZone(
-        SUB_CONFIG.name, SUB_CONFIG.spawnZone,
+        SUB_CONFIG.name, spawnZone,
         SUB_CONFIG.startDepth, SUB_CONFIG.startSpeed, SUB_CONFIG.startHeading,
         SUB_COALITION, THERMAL_LAYER_DEPTH, SUB_CONFIG.randomizeSpawn)
 elseif SUB_CONFIG.type == "ssn" then
     submarine = VirtualSubmarine:newSSNFromZone(
-        SUB_CONFIG.name, SUB_CONFIG.spawnZone,
+        SUB_CONFIG.name, spawnZone,
         SUB_CONFIG.startDepth, SUB_CONFIG.startSpeed, SUB_CONFIG.startHeading,
         SUB_COALITION, THERMAL_LAYER_DEPTH, SUB_CONFIG.randomizeSpawn)
 elseif SUB_CONFIG.type == "custom" then
     submarine = VirtualSubmarine:newFromZone(
-        SUB_CONFIG.name, SUB_CONFIG.spawnZone,
+        SUB_CONFIG.name, spawnZone,
         SUB_CONFIG.startDepth, SUB_CONFIG.startSpeed, SUB_CONFIG.startHeading,
         SUB_CONFIG.noiseFactor, SUB_CONFIG.maxSpeed, SUB_CONFIG.maxDepth,
         SUB_COALITION, THERMAL_LAYER_DEPTH, SUB_CONFIG.randomizeSpawn)
