@@ -3,7 +3,6 @@
 ## High Priority
 
 - **Diesel submarine battery system** — Diesel subs must snorkel periodically to recharge. Snorkelling forces near-surface depth with high noise factor, creating a detection window the hunter side can exploit. Core tactical loop for diesel vs SSN asymmetry.
-- **Depth charge awareness for AI** — The AI submarine commander has no reaction to nearby depth charge detonations. A loud nearby explosion should trigger an evasion response.
 
 ## Submarine Improvements
 
@@ -12,6 +11,10 @@
 - **"Go silent" quick command** — Human commander gets an all-stop / silent running shortcut rather than only speed deltas.
 - **Add WW2 diesel submarine class** — Pre-existing diesel type already exists; needs battery mechanic and period-appropriate performance limits.
 
+## Physics Improvements
+
+- **Depth-dependent kill radius** — Underwater explosions at greater ambient pressure produce more lethal shock waves. Kill radius should scale with detonation depth: `effectiveRadius = baseRadius × (1 + depth / 400 × 0.5)` (e.g. 80m → 100m at 200m → 120m at 400m). Applies primarily to depth charges where the hunter explicitly sets detonation depth; could also apply to ASW torpedoes for consistency. Rewards correct depth setting and gives submarines a meaningful reason to dive deep beyond just sonar avoidance.
+
 ## Hunter Improvements
 
 - **Active sonobuoy variant (DICASS)** — Premium buoy type that gives bearing and range (full fix) but immediately alerts the submarine coalition with the ping location. Tactical trade-off: spend a limited resource for a precision fix at the cost of warning the target.
@@ -19,8 +22,7 @@
 
 ## AI Commander Improvements
 
-- **Proactive noise maker use** — Before a sprint-and-dive manoeuvre, the AI should pre-deploy a noise maker to confuse passive listeners, not only react to incoming torpedoes.
-- **Depth charge evasion** — React to nearby depth charge detonations with an evasion response (random heading change, depth change, possible noise maker).
+- **Depth charge follow-up noise makers** — During depth charge evasion, if charges keep falling close, re-deploy noise makers similar to the torpedo re-detection logic in `updateEvade`.
 
 ## Multiplayer / Scale
 

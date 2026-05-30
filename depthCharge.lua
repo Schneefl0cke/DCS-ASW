@@ -75,6 +75,13 @@ function DepthCharge:detonate()
         end
     end
 
+    -- Log for AI awareness
+    if ASW_DC_DETONATIONS then
+        ASW_DC_DETONATIONS[#ASW_DC_DETONATIONS + 1] = {
+            x = self.x, z = self.z, depth = self.setDepth, time = timer.getTime()
+        }
+    end
+
     if hit then
         trigger.action.explosion({x = hit.x, y = 0, z = hit.z}, 1000)
         hit:destroy()

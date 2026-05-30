@@ -166,6 +166,10 @@ function MADDetector:sendStatusHUD(unit)
     end
 
     trigger.action.outTextForGroup(dcsGroup:getID(), msg, 2, false)
+
+    if ASW_SOUND then
+        ASW_SOUND:playOnce(self.groupName, "mad_buzz")
+    end
 end
 
 function MADDetector:scan(unit)
