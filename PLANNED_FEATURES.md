@@ -30,6 +30,7 @@
 ## AI Commander Improvements
 
 - **Depth charge follow-up noise makers** — During depth charge evasion, if charges keep falling close, re-deploy noise makers similar to the torpedo re-detection logic in `updateEvade`.
+- **Avoid shallow waters** - The AI Commander should try to avoid to run the submarine aground.
 
 ## Multiplayer / Scale
 
