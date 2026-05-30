@@ -10,7 +10,20 @@ A two-sided ASW game system for DCS World using MOOSE framework. One side operat
 
 ## Script Load Order
 
-Load scripts in this order in the DCS Mission Editor (DO ONCE triggers):
+### Quick setup (recommended)
+
+Copy both files from the `release/` folder into your mission folder. In the DCS Mission Editor, create two **DO ONCE** triggers and load them in this order:
+
+| # | File | Notes |
+|---|---|---|
+| 1 | `asw.lua` | All framework classes — do not edit |
+| 2 | `asw_config.lua` | Your mission configuration — edit this |
+
+That's it. No other scripts needed.
+
+### Manual load order (development / source)
+
+If loading individual source files, use this order in the DCS Mission Editor (DO ONCE triggers):
 
 1. `submarine.lua`
 2. `sonarbuoy.lua`
