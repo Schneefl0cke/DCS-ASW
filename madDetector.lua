@@ -123,7 +123,7 @@ function MADDetector:startUpdateLoop()
             -- Recharge while inactive
             self.charge = math.min(100, self.charge + self.rechargeRate)
             self.rechargeTick = (self.rechargeTick or 0) + 1
-            if self.rechargeTick >= 5 then
+            if self.rechargeTick >= 5 and self.charge < 100 then
                 self.rechargeTick = 0
                 local dcsGroup = Group.getByName(self.groupName)
                 if dcsGroup and dcsGroup:isExist() then
