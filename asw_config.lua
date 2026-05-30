@@ -153,6 +153,7 @@ local SOUND_CONFIG = {
     noisemaker_loop = { file = "sounds/noisemaker_active.ogg",  duration = 3,   priority = SoundScheduler.PRIORITY.LOW },
     warning_torpedo = { file = "sounds/warning_torpedo.ogg",   duration = 3,   priority = SoundScheduler.PRIORITY.ALERT },
     warning_sonar   = { file = "sounds/warning_sonar.ogg",     duration = 2,   priority = SoundScheduler.PRIORITY.ALERT },
+    mad_buzz        = { file = "sounds/buzz.ogg",              duration = 3,   priority = SoundScheduler.PRIORITY.LOW },
 }
 
 -- =============================================================================

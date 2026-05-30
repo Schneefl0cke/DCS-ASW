@@ -81,6 +81,7 @@ The sound scheduler registers these sound names:
 | `noisemaker_loop` | Noise maker active (looping) |
 | `warning_torpedo` | Submarine side warned of ASW torpedo / depth charges |
 | `warning_sonar` | Submarine side warned of active sonar ping |
+| `mad_buzz` | Audible tone played to the pilot while MAD is actively scanning (every 2s) |
 
 ---
 
