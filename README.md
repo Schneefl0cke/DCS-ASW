@@ -47,7 +47,7 @@ If loading individual source files, use this order in the DCS Mission Editor (DO
 
 | Zone Name | Purpose |
 |---|---|
-| `Submarine_initial_position` | Default spawn location for the submarine. Can be a single zone name or a **table of zone names** — one is chosen at random each mission start for replayability (configurable in `asw_config.lua`) |
+| `spawn_1`, `spawn_2`, `spawn_3`, ... | Submarine spawn zones. Configure one name or a table of names in `asw_config.lua` — one is chosen at random each mission start for replayability. |
 | `ASW_Hunter_Rearming` | Circle zone where ASW aircraft land/hover to rearm. Used alongside `rearmUnits` — both are checked. |
 | `patrol_1`, `patrol_2`, ... | Patrol waypoints for AI submarine commander (only needed if using AI) |
 
