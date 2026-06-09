@@ -1,6 +1,7 @@
+# DCS Anti-Submarine Warfare (ASW) Scripting Framework
+
 <img width="600" height="400" alt="asw_heli" src="https://github.com/user-attachments/assets/e97c8133-57a6-45a9-a73d-92d15850604c" />
 <img width="1500" height="844" alt="SSN" src="https://github.com/user-attachments/assets/5c33f5c4-91d0-4faf-8323-30a6598840c4" />
-# DCS Anti-Submarine Warfare (ASW) Scripting Framework
 
 A two-sided ASW game system for DCS World using MOOSE framework. One side operates a virtual submarine (human or AI controlled), the other side hunts it with ASW aircraft equipped with sonarbuoys and torpedoes.
 
