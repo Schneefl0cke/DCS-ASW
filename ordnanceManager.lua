@@ -104,8 +104,13 @@ function OrdnanceManager:startGroupScanner()
                 local group = unit:getGroup()
                 if group then
                     local gName = group:getName()
-                    if mgr:isHunterGroup(gName) and not mgr.trackedGroups[gName] then
-                        mgr:initGroup(gName)
+                    if mgr:isHunterGroup(gName) then
+                        if not mgr.trackedGroups[gName] then
+                            mgr:initGroup(gName)
+                        elseif mgr.groupData[gName] then
+                            -- Slot taken over from a previous player — show current inventory
+                            mgr:showStatus(gName)
+                        end
                     end
                 end
             end

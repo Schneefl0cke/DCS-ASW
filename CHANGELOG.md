@@ -1,3 +1,8 @@
+## 0.1.4
+
+### Inventory status on slot takeover
+- When a player joins a hunter group that was previously occupied, the current inventory is automatically displayed (buoys, torpedoes, depth charges, dipping sonar state) so they know what the previous player left behind
+
 ## 0.1.3
 
 ### Detection confidence threshold
