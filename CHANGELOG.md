@@ -1,3 +1,9 @@
+## 0.1.2
+
+### Multiplayer radio menu fix
+- Fixed F10 menus not appearing for `asw_helo_2`, `asw_helo_3`, etc. in multiplayer: the group scanner was permanently marking groups as tracked even when MOOSE failed to find them (e.g. before a player occupied the slot), preventing any retry
+- Added a `S_EVENT_PLAYER_ENTER_UNIT` event handler so menus are created the moment a player takes a hunter slot, avoiding F10 menu sync issues with clients who join after mission start
+
 ## 0.1.0 — Initial Release
 
 ## 0.1.1

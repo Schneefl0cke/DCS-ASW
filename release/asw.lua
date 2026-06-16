@@ -2998,6 +2998,27 @@ function OrdnanceManager:new(config)
 end
 
 function OrdnanceManager:startGroupScanner()
+    -- In multiplayer, players join slots after the mission starts.
+    -- React immediately when a player enters a hunter group slot so their
+    -- menus are created right at join time (avoids F10 menu sync issues).
+    local mgr = self
+    local playerEnterHandler = {}
+    function playerEnterHandler:onEvent(event)
+        if event.id == world.event.S_EVENT_PLAYER_ENTER_UNIT then
+            local unit = event.initiator
+            if unit and unit:isExist() then
+                local group = unit:getGroup()
+                if group then
+                    local gName = group:getName()
+                    if mgr:isHunterGroup(gName) and not mgr.trackedGroups[gName] then
+                        mgr:initGroup(gName)
+                    end
+                end
+            end
+        end
+    end
+    world.addEventHandler(playerEnterHandler)
+
     local function scan()
         local allGroups = coalition.getGroups(self.ownerCoalition)
         if allGroups then
@@ -3057,7 +3078,6 @@ end
 -- data.menus so subclasses can extend them after calling this.
 function OrdnanceManager:initGroup(groupName)
     if self.trackedGroups[groupName] then
-        self:log("ASW: Group '" .. groupName .. "' is already registered — ignoring duplicate init.")
         return
     end
 
@@ -3071,11 +3091,10 @@ function OrdnanceManager:initGroup(groupName)
         end
     end
 
-    self.trackedGroups[groupName] = true
     self.groupData[groupName] = {
-        freshCount        = self.maxBuoys,  -- fresh buoys ready to deploy
-        savedBuoys        = {},             -- recovered active buoys with preserved battery
-        expiredCount      = 0,              -- recovered depleted buoys (need rearm to revive)
+        freshCount        = self.maxBuoys,
+        savedBuoys        = {},
+        expiredCount      = 0,
         torpedoInventory  = self.maxTorpedoes,
         torpedoDepth      = 100,
         dcInventory       = self.maxDepthCharges,
@@ -3088,8 +3107,12 @@ function OrdnanceManager:initGroup(groupName)
     }
 
     local mooseGroup = GROUP:FindByName(groupName)
-    if not mooseGroup then return end
+    if not mooseGroup then
+        self.groupData[groupName] = nil  -- clean up so the next scan cycle can retry
+        return
+    end
 
+    self.trackedGroups[groupName] = true
     local data = self.groupData[groupName]
     local rootMenu = MENU_GROUP:New(mooseGroup, "ASW Operations")
     data.menus.root = rootMenu
