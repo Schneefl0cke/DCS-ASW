@@ -600,6 +600,7 @@ function Sonarbuoy:new(name, x, z, ownerCoalition, maxDetectionRange, thermalLay
         batteryRemaining  = life,   -- seconds remaining (nil = unlimited)
         deployedAt        = nil,    -- set on deploy/redeploy
         batteryDepleted   = false,
+        halfWarningGiven  = false,
     }
     setmetatable(obj, Sonarbuoy)
     obj.deployedAt = timer.getTime()
@@ -672,7 +673,16 @@ function Sonarbuoy:tickBattery()
     if not self.active then return end
     self:refreshSmoke()
     if self.batteryLife == nil or self.batteryDepleted or not self.deployedAt then return end
-    local elapsed = timer.getTime() - self.deployedAt
+    local elapsed   = timer.getTime() - self.deployedAt
+    local remaining = self.batteryRemaining - elapsed
+
+    if not self.halfWarningGiven and remaining <= self.batteryRemaining * 0.5 then
+        self.halfWarningGiven = true
+        log(string.format("%s battery at 50%% — %d:%02d remaining",
+            self.name, math.floor(remaining / 60), math.floor(remaining % 60)),
+            self.ownerCoalition)
+    end
+
     if elapsed >= self.batteryRemaining then
         self:expire()
     end
@@ -694,9 +704,16 @@ function Sonarbuoy:expire()
     self.textMarkId = nextBuoyMarkId()
     trigger.action.textToAll(-1, self.textMarkId, textPoint, gray, {0, 0, 0, 0}, 10, true, self.name .. " [DEAD]")
 
-    -- Switch to red smoke
-    trigger.action.smoke(point, trigger.smokeColor.Red)
-    self.lastSmokeTime = timer.getTime()
+    -- Delay red smoke until the current orange smoke has burned out naturally
+    local smokeAge   = timer.getTime() - self.lastSmokeTime
+    local smokeDelay = math.max(0, 300 - smokeAge)
+    local smokeX, smokeZ = self.x, self.z
+    timer.scheduleFunction(function()
+        if self.active then
+            trigger.action.smoke({x = smokeX, y = 0, z = smokeZ}, trigger.smokeColor.Red)
+            self.lastSmokeTime = timer.getTime()
+        end
+    end, nil, timer.getTime() + smokeDelay)
 
     log(self.name .. " battery depleted — buoy dead", self.ownerCoalition)
 end
@@ -747,6 +764,7 @@ function Sonarbuoy:redeploy(x, z)
     self.z = z
     self.active = true
     self.deployedAt = timer.getTime()
+    self.halfWarningGiven = false
     self:markOwnPosition()
     self:deploySmoke()
 

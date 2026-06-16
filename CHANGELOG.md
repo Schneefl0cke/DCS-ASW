@@ -1,3 +1,9 @@
+## 0.1.5
+
+### Sonarbuoy battery improvements
+- Added a 50% battery warning message to the hunter coalition when a deployed buoy reaches half charge, showing remaining time
+- Fixed smoke overlap bug: red smoke is now delayed until the current orange smoke has burned out (~5 min), so the two never overlap
+
 ## 0.1.4
 
 ### Inventory status on slot takeover
