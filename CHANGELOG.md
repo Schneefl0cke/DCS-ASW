@@ -1,3 +1,9 @@
+## 0.1.3
+
+### Detection confidence threshold
+- Added a 5% minimum confidence threshold to sonarbuoys, dipping sonar, and MAD detector — contacts below this probability are suppressed entirely and no map marker is drawn
+- Prevents marginal detections at long range or across the thermal layer from leaking position hints to the hunter side
+
 ## 0.1.2
 
 ### Multiplayer radio menu fix

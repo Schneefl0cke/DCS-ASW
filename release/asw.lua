@@ -849,6 +849,9 @@ function Sonarbuoy:tryDetect(sub)
 
     debugMessage(self.name .. " -> " .. sub.name .. " dist=" .. string.format("%.0f", distance) .. "m prob=" .. string.format("%.2f", probability))
 
+    -- Signal too weak to produce a reliable contact
+    if probability < 0.05 then return nil end
+
     -- Roll for detection
     if math.random() > probability then return nil end
 
@@ -2296,6 +2299,9 @@ function DippingSonar:tryDetect(sub, sonarX, sonarZ)
 
     debugMessage(self.groupName .. " dip sonar -> " .. sub.name .. " dist=" .. string.format("%.0f", distance) .. "m prob=" .. string.format("%.2f", probability))
 
+    -- Signal too weak to produce a reliable contact
+    if probability < 0.05 then return nil end
+
     if math.random() > probability then return nil end
 
     -- Detection successful
@@ -2674,7 +2680,8 @@ function MADDetector:scan(unit)
                 local distFactor  = 1 - (dist / effectiveRange) * 0.3
                 local probability = 0.9 * depthFactor * distFactor
 
-                if math.random() < probability then
+                -- Signal too weak to produce a reliable contact
+                if probability >= 0.05 and math.random() < probability then
                     self:reportContact(sub, dist, altAGL)
                 end
             end

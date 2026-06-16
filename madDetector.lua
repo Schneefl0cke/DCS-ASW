@@ -195,7 +195,8 @@ function MADDetector:scan(unit)
                 local distFactor  = 1 - (dist / effectiveRange) * 0.3
                 local probability = 0.9 * depthFactor * distFactor
 
-                if math.random() < probability then
+                -- Signal too weak to produce a reliable contact
+                if probability >= 0.05 and math.random() < probability then
                     self:reportContact(sub, dist, altAGL)
                 end
             end

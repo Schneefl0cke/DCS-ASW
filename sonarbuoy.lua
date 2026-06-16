@@ -302,6 +302,9 @@ function Sonarbuoy:tryDetect(sub)
 
     debugMessage(self.name .. " -> " .. sub.name .. " dist=" .. string.format("%.0f", distance) .. "m prob=" .. string.format("%.2f", probability))
 
+    -- Signal too weak to produce a reliable contact
+    if probability < 0.05 then return nil end
+
     -- Roll for detection
     if math.random() > probability then return nil end
 
