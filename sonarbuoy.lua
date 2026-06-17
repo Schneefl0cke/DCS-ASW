@@ -54,6 +54,7 @@ function Sonarbuoy:new(name, x, z, ownerCoalition, maxDetectionRange, thermalLay
         deployedAt        = nil,    -- set on deploy/redeploy
         batteryDepleted   = false,
         halfWarningGiven  = false,
+        rangeRingMarkId   = nil,
     }
     setmetatable(obj, Sonarbuoy)
     obj.deployedAt = timer.getTime()
@@ -147,8 +148,10 @@ function Sonarbuoy:expire()
     self:clearContactMarkers()
 
     -- Redraw map markers in gray
-    if self.circleMarkId then trigger.action.removeMark(self.circleMarkId) end
-    if self.textMarkId  then trigger.action.removeMark(self.textMarkId)  end
+    if self.circleMarkId  then trigger.action.removeMark(self.circleMarkId)  end
+    if self.textMarkId   then trigger.action.removeMark(self.textMarkId)   end
+    if self.rangeRingMarkId then trigger.action.removeMark(self.rangeRingMarkId) end
+    self.rangeRingMarkId = nil
     local point     = {x = self.x,       y = 0, z = self.z}
     local textPoint = {x = self.x + 200, y = 0, z = self.z}
     local gray      = {0.5, 0.5, 0.5, 1}
@@ -180,6 +183,10 @@ function Sonarbuoy:clearMapPresence()
     if self.textMarkId then
         trigger.action.removeMark(self.textMarkId)
         self.textMarkId = nil
+    end
+    if self.rangeRingMarkId then
+        trigger.action.removeMark(self.rangeRingMarkId)
+        self.rangeRingMarkId = nil
     end
     self:clearContactMarkers()
 end
@@ -257,6 +264,10 @@ function Sonarbuoy:markOwnPosition()
 
     self.textMarkId = nextBuoyMarkId()
     trigger.action.textToAll(-1, self.textMarkId, textPoint, blue, {0, 0, 0, 0}, 10, true, self.name)
+
+    self.rangeRingMarkId = nextBuoyMarkId()
+    trigger.action.circleToAll(self.ownerCoalition, self.rangeRingMarkId, point, self.maxDetectionRange,
+        {0, 0.4, 1, 0.5}, {0, 0.4, 1, 0.03}, 1, true)
 end
 
 -- ===== DETECTION =====

@@ -40,9 +40,11 @@ If loading individual source files, use this order in the DCS Mission Editor (DO
 10. `ordnanceManager.lua`
 11. `helicopterHunterManager.lua`
 12. `planeHunterManager.lua`
-13. `humanSubmarineCommander.lua`
-14. `aiSubmarineCommander.lua`
-15. `asw_config.lua`
+13. `shipSonar.lua`
+14. `shipCommander.lua`
+15. `humanSubmarineCommander.lua`
+16. `aiSubmarineCommander.lua`
+17. `asw_config.lua`
 
 ## Mission Editor Setup
 
@@ -58,7 +60,8 @@ If loading individual source files, use this order in the DCS Mission Editor (DO
 
 - Helicopter ASW groups must have **`_asw_helo`** in their group name (configurable via `HELO_CONFIG.prefix`).
 - Fixed-wing ASW groups must have **`_asw_plane`** in their group name (configurable via `PLANE_CONFIG.prefix`).
-- Each group should be a single aircraft. Single-player is possible, but not recommended; a second player as copilot for the helicopters improves the experience significantly.
+- Ship groups must contain the configured prefix (default **`asw_ship`**) in their group name. **Each ship group must contain exactly one unit** — groups with more units are skipped with a warning.
+- Each aircraft group should be a single aircraft. Single-player is possible, but not recommended; a second player as copilot for the helicopters improves the experience significantly.
 
 ### Coalition Setup
 
@@ -149,6 +152,16 @@ Sonarbuoys are shown as a **small blue circle** with the buoy name, visible to a
 
 ### Sonarbuoy Contact
 A **yellow bearing line** is drawn from the buoy outward to max detection range, labelled with bearing and confidence. Passive buoys give **bearing only** — the submarine is somewhere along that line. Cross two or more bearing lines from different buoys to triangulate a position fix. Lines auto-expire after 30 seconds.
+
+### Sensor Range Rings
+Each active sensor draws its maximum detection radius on the F10 map, visible to the owning coalition only:
+
+| Sensor | Ring colour | Condition |
+|---|---|---|
+| Sonarbuoy | Semi-transparent blue circle | Drawn on deploy; removed when the buoy is picked up, discarded, or battery-depleted |
+| Dipping sonar | Teal circle | Drawn when the sonar head is in the water (state = active); moves with the helicopter; removed on raise or cable break |
+| Ship sonar — passive | Blue circle (12 km) | Always shown; switches to orange when active sonar is on |
+| Ship sonar — active | Orange circle (20 km) | Replaces passive ring; an orange V-shaped sweep triangle rotates with the beam |
 
 ### Submarine Sunk
 When destroyed, a **red circle with text** is placed at the sunk position, visible to all coalitions.
@@ -304,6 +317,70 @@ MAD specifications:
 | **Cancel** | Cancel current prepare operation |
 | **Status** | Show buoy inventory (fresh/saved/expired), deployed counts (active/dead), torpedo inventory, MAD state, global pool size, current state |
 | **Rearm** | Revive expired buoys, top up from global pool, restock torpedoes, repair dipping sonar, recharge MAD. Must be near a `rearmUnit` carrier **or** inside the `rearmZone` — both are valid. |
+
+---
+
+## ASW Ships (BLUE)
+
+Surface ships are real DCS units that are discovered at mission start by group name prefix. Unlike aircraft hunters, ships are controlled via **coalition-wide** F10 menus (`ASW Ships → [Ship Name] → ...`) — any BLUE player or Game Master can issue orders to any ship.
+
+Ships must be placed in the DCS Mission Editor with one unit per group and a group name containing the configured prefix (default `asw_ship`).
+
+### F10 Menu: Speed
+
+| Command | Description |
+|---|---|
+| **Increase Speed (+5 kt)** | Add 5 knots to current target speed |
+| **Decrease Speed (-5 kt)** | Subtract 5 knots (minimum 0) |
+| **Stop (0 kt)** | Bring ship to a halt |
+| **Set Speed → 5/10/15/20 kt** | Jump to an absolute speed preset |
+
+Speed is applied by pushing a waypoint 50 km ahead via `Controller:setTask`, refreshed every 5 seconds so the ship continues moving.
+
+### F10 Menu: Heading
+
+| Command | Description |
+|---|---|
+| **Turn Left 30°** | Rotate target heading 30° counter-clockwise |
+| **Turn Right 30°** | Rotate target heading 30° clockwise |
+| **Set Heading → N/NE/E/SE/S/SW/W/NW** | Jump to a cardinal or intercardinal heading |
+
+The ship's heading is read at init from the DCS unit. Changes are applied on the next waypoint refresh (≤5 s).
+
+### F10 Menu: Depth Charges
+
+| Command | Description |
+|---|---|
+| **Drop 1 Charge** | Release a single depth charge at the ship's current position |
+| **Drop Pattern (5 charges)** | Release 5 charges at 10-second intervals as the ship moves, laying a trail |
+| **Set DC Depth → 30/50/100/150/200 m** | Choose detonation depth |
+| **DC Status** | Show heading, speed, depth setting, sonar state |
+
+Depth charges use the same `DepthCharge` class as aircraft. A ship that is stationary when it drops charges will be within the blast radius — this is intentional (player's decision).
+
+### F10 Menu: Sonar
+
+Ships carry a `ShipSonar` instance with two modes:
+
+| Mode | Description |
+|---|---|
+| **Passive (default)** | Continuous bearing-only detection; same bearing-line contact markers as sonarbuoys; recharges active sonar battery |
+| **Active** | Rotating directional sweep (30° cone, one revolution per 60 s); position fix on contact; submarine side gets a sonar ping warning each tick; battery drains at ~0.11%/s (15-minute battery); auto-switches to passive at 0% |
+
+Active sonar tracking: when a contact return is received, the sweep locks onto that bearing and oscillates ±15° to hold the contact. After 15 seconds without a return it resumes circle scan.
+
+| Command | Description |
+|---|---|
+| **Activate (Active Mode)** | Switch to active sonar (fails if charge = 0%) |
+| **Deactivate (Passive Mode)** | Switch back to passive; contact tracking cleared |
+| **Sonar Status** | Show mode, charge %, estimated time remaining, sweep angle |
+
+### F10 Menu: AI Behavior
+
+| Command | Description |
+|---|---|
+| **Toggle Zig-Zag** | Enable/disable evasive weaving — ship oscillates ±20° around the player-set heading on a 45-second sine wave |
+| **Ship Status** | Full status: heading, speed, DC depth, zig-zag state, sonar state |
 
 ---
 
@@ -486,6 +563,34 @@ probability = effectiveNoise × depthPenalty × thermalPenalty × distanceFactor
 - Thermal penalty is based on cable depth vs sub depth relative to thermal layer — lowering the cable below the layer removes the penalty
 - Position estimated with bearing error (±30°) and range error (±25%), depth error (±30%), all scaled by confidence
 
+### Ship Passive Sonar Detection Formula
+
+```
+effectiveNoise = submarine.speed × submarine.noiseFactor
+depthPenalty = max(0.1, 1 - depth/500)
+thermalPenalty = 1.0 (above layer) or 0.2 (below layer)
+distanceFactor = 1 - distance/12000
+probability = effectiveNoise × depthPenalty × thermalPenalty × distanceFactor × 0.10
+```
+
+- Same bearing-only output as sonarbuoys (no range or depth)
+- Stationary/silent submarines (effectiveNoise < 0.1) are undetectable
+
+### Ship Active Sonar Detection Formula
+
+```
+effectiveSignal = 1.0 + submarine.speed × submarine.noiseFactor × 0.3
+depthPenalty = max(0.1, 1 - depth/500)
+thermalPenalty = 1.0 (above layer) or 0.2 (below layer)
+distanceFactor = 1 - distance/20000
+-- cone check: only within ±15° of current sweep bearing
+probability = effectiveSignal × depthPenalty × thermalPenalty × distanceFactor × 0.20
+```
+
+- Detects even a stationary submarine (hull reflection)
+- Full position estimate: bearing error ±20°, range error ±20%, depth error ±25% (all scaled by confidence)
+- Contact marker on F10 map (30-second duration)
+
 ### Common Detection Properties
 
 - Probability clamped to [0, 0.95]
@@ -600,6 +705,17 @@ BUOY_CONFIG = {
     lifetime   = 1800,  -- battery life per buoy in seconds (nil = unlimited)
     globalPool = 10,    -- reserve buoys at the carrier, shared across all hunters
 }
+
+-- 7. Ships (optional — omit if no ships in the mission)
+SHIP_CONFIG = {
+    groupPrefix       = "asw_ship",  -- group name prefix to identify ship groups
+    ownerCoalition    = coalition.side.BLUE,
+    submarines        = detectableObjects,   -- same shared table as all other sensors
+    thermalLayerDepth = THERMAL_LAYER_DEPTH,
+    -- Per-ship sonar overrides (optional):
+    -- passiveRange = 12000,  -- passive sonar range in meters
+    -- activeRange  = 20000,  -- active sonar range in meters
+}
 ```
 
 ---
@@ -620,6 +736,8 @@ BUOY_CONFIG = {
 | `ordnanceManager.lua` | `OrdnanceManager` | Base class: buoy deploy, torpedo launch, inventory, rearm, F10 menus |
 | `helicopterHunterManager.lua` | `HelicopterHunterManager` | Extends base with dipping sonar and buoy recovery |
 | `planeHunterManager.lua` | `PlaneHunterManager` | Extends base with fixed-wing altitude/speed limits; no dipping sonar |
+| `shipSonar.lua` | `ShipSonar` | Passive/active sonar for surface ships; rotating sweep triangle, battery, range ring |
+| `shipCommander.lua` | `ShipCommander` | Coalition F10 menus for ship speed/heading/DC/sonar/AI control |
 | `humanSubmarineCommander.lua` | `HumanSubmarineCommander` | F10 menus for human submarine control |
 | `aiSubmarineCommander.lua` | `AISubmarineCommander` | Autonomous submarine AI with patrol/attack/evade states |
 | `asw_config.lua` | — | Main entry point, configuration, wiring |
