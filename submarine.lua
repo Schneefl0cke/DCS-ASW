@@ -77,8 +77,22 @@ end
 -- zoneName: The string name of your circular trigger zone in the Mission Editor
 -- randomize: If true, picks a random point inside the circular zone. If false, uses the exact center.
 function VirtualSubmarine:newFromZone(name, zoneName, depth, speed, heading, noiseFactor, maxSpeed, maxDepth, ownerCoalition, thermalLayerDepth, randomize)
+    -- Accept a table of zone names and pick one at random
+    if type(zoneName) == "table" then
+        if #zoneName == 0 then
+            trigger.action.outText("VIRTUAL SUBMARINE ERROR: spawnZone table is empty — check asw_config.lua", 15)
+            env.info("VIRTUAL SUBMARINE ERROR: newFromZone called with empty zone name table", false)
+            return nil
+        end
+        zoneName = zoneName[math.random(#zoneName)]
+    end
+    if not zoneName then
+        trigger.action.outText("VIRTUAL SUBMARINE ERROR: spawn zone name is nil — check spawnZone in asw_config.lua", 15)
+        env.info("VIRTUAL SUBMARINE ERROR: newFromZone called with nil zone name", false)
+        return nil
+    end
     local zone = trigger.misc.getZone(zoneName)
-    
+
     if not zone then
         trigger.action.outText("VIRTUAL SUBMARINE ERROR: Trigger zone '" .. zoneName .. "' could not be found!", 10)
         env.info("VIRTUAL SUBMARINE ERROR: Trigger zone '" .. zoneName .. "' could not be found!", false)

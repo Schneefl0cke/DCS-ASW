@@ -38,7 +38,7 @@ function ShipSonar:new(groupName, ownerCoalition, thermalLayerDepth, submarines,
         passiveRange       = config.passiveRange or 12000,
         passiveScaleFactor = 0.10,
         -- Active sonar
-        activeRange        = config.activeRange or 20000,
+        activeRange        = config.activeRange or 10000,
         activeScaleFactor  = 0.20,
         -- Mode / battery
         mode               = "passive",
@@ -56,6 +56,7 @@ function ShipSonar:new(groupName, ownerCoalition, thermalLayerDepth, submarines,
         trackingOscPhase   = 0,
         -- Visuals
         rangeRingMarkId    = nil,
+        rangeRingTextMarkId = nil,
         contactMarkers     = {},
         -- Update
         detectInterval     = 3,
@@ -368,19 +369,32 @@ function ShipSonar:updateVisuals(shipX, shipZ)
 end
 
 function ShipSonar:updateRangeRing(shipX, shipZ)
-    if self.rangeRingMarkId then
-        trigger.action.removeMark(self.rangeRingMarkId)
-        self.rangeRingMarkId = nil
-    end
+    if self.rangeRingMarkId     then trigger.action.removeMark(self.rangeRingMarkId)     end
+    if self.rangeRingTextMarkId then trigger.action.removeMark(self.rangeRingTextMarkId) end
+
     local center = {x = shipX, y = 0, z = shipZ}
-    self.rangeRingMarkId = nextShipSonarMarkId()
+    self.rangeRingMarkId     = nextShipSonarMarkId()
+    self.rangeRingTextMarkId = nextShipSonarMarkId()
+
+    local range, label, color
     if self.mode == "active" then
-        trigger.action.circleToAll(self.ownerCoalition, self.rangeRingMarkId, center, self.activeRange,
-            {1, 0.5, 0, 0.6}, {1, 0.5, 0, 0.03}, 1, true)
+        range = self.activeRange
+        label = string.format("Sonar active range (%d km)", math.floor(range / 1000))
+        color = {1, 0.5, 0, 0.6}
+        trigger.action.circleToAll(self.ownerCoalition, self.rangeRingMarkId, center, range,
+            color, {1, 0.5, 0, 0.03}, 1, true)
     else
-        trigger.action.circleToAll(self.ownerCoalition, self.rangeRingMarkId, center, self.passiveRange,
-            {0, 0.6, 1, 0.4}, {0, 0.6, 1, 0.03}, 1, true)
+        range = self.passiveRange
+        label = string.format("Sonar passive range (%d km)", math.floor(range / 1000))
+        color = {0, 0.6, 1, 0.4}
+        trigger.action.circleToAll(self.ownerCoalition, self.rangeRingMarkId, center, range,
+            color, {0, 0.6, 1, 0.03}, 1, true)
     end
+
+    -- Text label placed at the north edge of the ring
+    local labelPt = {x = shipX, y = 0, z = shipZ + range}
+    trigger.action.textToAll(self.ownerCoalition, self.rangeRingTextMarkId, labelPt,
+        color, {0, 0, 0, 0}, 12, true, label)
 end
 
 function ShipSonar:updateSweepLines(shipX, shipZ)
@@ -435,6 +449,10 @@ function ShipSonar:destroy()
     if self.rangeRingMarkId then
         trigger.action.removeMark(self.rangeRingMarkId)
         self.rangeRingMarkId = nil
+    end
+    if self.rangeRingTextMarkId then
+        trigger.action.removeMark(self.rangeRingTextMarkId)
+        self.rangeRingTextMarkId = nil
     end
     self:clearContactMarkers()
     if self.updateScheduleId then

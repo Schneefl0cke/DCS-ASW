@@ -36,15 +36,16 @@ local THERMAL_LAYER_DEPTH = 90  -- meters
 -- =============================================================================
 -- Choose submarine type: "diesel", "ssn", or "custom"
 -- Spawn zone must exist as a trigger zone in the Mission Editor.
+-- spawnZone can be a single string or a table of names for a random pick.
 
 local SUB_CONFIG = {
-    type            = "ssn",                     -- "diesel", "ssn", or "custom"
-    name            = "Red Dragon",                      -- Display name
-    spawnZone       = "Submarine_initial_position",  -- Trigger zone name
-    startDepth      = 20,                           -- Starting depth in meters
-    startSpeed      = 2,                            -- Starting speed in m/s
-    startHeading    = 270,                          -- Starting heading in degrees
-    randomizeSpawn  = false,                        -- Randomize position within zone?
+    type            = "ssn",                -- "diesel", "ssn", or "custom"
+    name            = "Red Dragon",         -- Display name
+    spawnZone       = {"spawn_1", "spawn_2", "spawn_3"},            -- Trigger zone name, or table: {"zone_a", "zone_b"}
+    startDepth      = 20,                   -- Starting depth in meters
+    startSpeed      = 2,                    -- Starting speed in m/s
+    startHeading    = 270,                  -- Starting heading in degrees
+    randomizeSpawn  = false,                -- Randomize position within zone?
 
     -- Custom type only (ignored for diesel/ssn):
     noiseFactor     = 1.0,
@@ -69,7 +70,7 @@ local AI_CONFIG = {
     patrolSpeed     = 5,        -- m/s while patrolling
     patrolDepth     = 80,       -- meters while patrolling
     attackRange     = 12000,    -- meters to engage detected ships
-    evasionBuoyRange = 7000,   -- distance to buoy that triggers evasion
+    evasionBuoyRange = 7000,    -- distance to buoy that triggers evasion
     evasionDuration = 180,      -- seconds to evade before resuming patrol
     profile         = "cautious", -- "aggressive" or "cautious"
 }
@@ -81,36 +82,36 @@ local AI_CONFIG = {
 -- Group names must contain the prefix defined below.
 
 local HELO_CONFIG = {
-    prefix          = "_asw_helo",                  -- Group name prefix for helicopters
-    rearmZone       = "ASW_Hunter_Rearming",        -- Trigger zone for rearming (static); checked alongside rearmUnits
-    rearmUnits      = {"Achilles", "Ariadne", "Andromeda", "Invincible"},                           -- Carrier unit names (e.g. {"CVN-74", "CVN-75"}); checked alongside rearmZone
-    rearmRadius     = 500,                          -- Meters around each rearmUnit
-    maxBuoys        = 4,                            -- Sonarbuoys per hunter
-    maxTorpedoes    = 2,                            -- ASW torpedoes per hunter
-    maxDepthCharges = 4,                            -- Depth charges per hunter
-    maxAltitude     = 50,                           -- Max AGL for buoy/torpedo deploy (meters)
-    maxSpeed        = 60,                           -- Max speed for buoy/torpedo deploy (m/s)
-    dcMaxAltitude   = 150,                          -- Max AGL for depth charge drop (meters)
-    dcMaxSpeed      = 80,                           -- Max speed for depth charge drop (m/s)
-    recoveryRange   = 10,                           -- Max distance to recover a buoy (meters)
-    detectInterval  = 5,                            -- Seconds between sonarbuoy detection cycles
+    prefix          = "_asw_helo",          -- Group name prefix for helicopters
+    rearmZone       = "ASW_Hunter_Rearming",-- Trigger zone for rearming; checked alongside rearmUnits
+    rearmUnits      = {},                   -- Carrier unit names (e.g. {"CVN-74"}); checked alongside rearmZone
+    rearmRadius     = 500,                  -- Meters around each rearmUnit
+    maxBuoys        = 4,                    -- Sonarbuoys per hunter
+    maxTorpedoes    = 2,                    -- ASW torpedoes per hunter
+    maxDepthCharges = 4,                    -- Depth charges per hunter
+    maxAltitude     = 50,                   -- Max AGL for buoy/torpedo deploy (meters)
+    maxSpeed        = 60,                   -- Max speed for buoy/torpedo deploy (m/s)
+    dcMaxAltitude   = 150,                  -- Max AGL for depth charge drop (meters)
+    dcMaxSpeed      = 80,                   -- Max speed for depth charge drop (m/s)
+    recoveryRange   = 10,                   -- Max distance to recover a buoy (meters)
+    detectInterval  = 5,                    -- Seconds between sonarbuoy detection cycles
 }
 
 -- Fixed-wing hunters: buoy deployment + torpedo. No dipping sonar, no buoy recovery.
 -- Group names must contain the prefix defined below.
 
 local PLANE_CONFIG = {
-    prefix          = "_asw_plane",                 -- Group name prefix for fixed-wing
-    rearmZone       = "ASW_Hunter_Rearming",        -- Trigger zone for rearming; checked alongside rearmUnits
-    rearmUnits      = {},                           -- Carrier unit names (e.g. {"CVN-74", "CVN-75"}); checked alongside rearmZone
-    rearmRadius     = 500,                          -- Meters around each rearmUnit
-    maxBuoys        = 8,                            -- Planes carry more buoys
+    prefix          = "_asw_plane",         -- Group name prefix for fixed-wing
+    rearmZone       = "ASW_Hunter_Rearming",-- Trigger zone for rearming; checked alongside rearmUnits
+    rearmUnits      = {},                   -- Carrier unit names (e.g. {"CVN-74"}); checked alongside rearmZone
+    rearmRadius     = 500,                  -- Meters around each rearmUnit
+    maxBuoys        = 8,                    -- Planes carry more buoys
     maxTorpedoes    = 2,
-    maxDepthCharges = 16,                           -- Depth charges per hunter
-    maxAltitude     = 200,                          -- Max AGL for buoy/torpedo deploy (meters)
-    maxSpeed        = 120,                          -- Max speed for buoy/torpedo deploy (m/s)
-    dcMaxAltitude   = 500,                          -- Max AGL for depth charge drop (meters)
-    dcMaxSpeed      = 200,                          -- Max speed for depth charge drop (m/s)
+    maxDepthCharges = 16,                   -- Depth charges per hunter
+    maxAltitude     = 200,                  -- Max AGL for buoy/torpedo deploy (meters)
+    maxSpeed        = 120,                  -- Max speed for buoy/torpedo deploy (m/s)
+    dcMaxAltitude   = 500,                  -- Max AGL for depth charge drop (meters)
+    dcMaxSpeed      = 200,                  -- Max speed for depth charge drop (m/s)
     detectInterval  = 5,
     madConfig       = {
         detectionRange  = 500,   -- Horizontal detection radius at optimal altitude (meters)
@@ -123,7 +124,19 @@ local PLANE_CONFIG = {
 }
 
 -- =============================================================================
--- 6. SONARBUOY SUPPLY
+-- 6. SHIP CONFIGURATION
+-- =============================================================================
+-- Surface ships with depth charges and sonar.
+-- Group names in the Mission Editor must contain the prefix defined below.
+-- Each ship group must contain exactly one unit.
+
+local SHIP_CONFIG = {
+    prefix   = "asw_ship",  -- Group name prefix for surface ships
+    dcSupply = 50,           -- Depth charges per ship (no rearming)
+}
+
+-- =============================================================================
+-- 7. SONARBUOY SUPPLY
 -- =============================================================================
 -- lifetime:   battery life per buoy in seconds. nil = unlimited (no expiry).
 -- globalPool: extra buoys available at rearm, shared across all hunters.
@@ -135,24 +148,25 @@ local BUOY_CONFIG = {
 }
 
 -- =============================================================================
--- 7. SOUND CONFIGURATION
+-- 8. SOUND CONFIGURATION
 -- =============================================================================
 -- Set duration to the actual length of each sound file in seconds.
 -- Set to nil to disable a sound.
 
 local SOUND_CONFIG = {
-    sonar_ping      = { file = "sounds/sonar_ping.ogg",       duration = 2,   priority = SoundScheduler.PRIORITY.NORMAL },
-    sonar_extend    = { file = "sounds/sonar_extend.ogg",     duration = 3,   priority = SoundScheduler.PRIORITY.LOW },
-    sonar_retrieve  = { file = "sounds/sonar_retrieve.ogg",   duration = 3,   priority = SoundScheduler.PRIORITY.LOW },
-    sonar_splash    = { file = "sounds/sonar_splash.ogg",     duration = 2,   priority = SoundScheduler.PRIORITY.NORMAL },
+    sonar_ping        = { file = "sounds/sonar_ping.ogg",        duration = 2, priority = SoundScheduler.PRIORITY.NORMAL },
+    sonar_extend      = { file = "sounds/sonar_extend.ogg",      duration = 3, priority = SoundScheduler.PRIORITY.LOW },
+    sonar_retrieve    = { file = "sounds/sonar_retrieve.ogg",    duration = 3, priority = SoundScheduler.PRIORITY.LOW },
+    sonar_splash      = { file = "sounds/sonar_splash.ogg",      duration = 2, priority = SoundScheduler.PRIORITY.NORMAL },
     sonar_cable_break = { file = "sounds/sonar_cable_break.ogg", duration = 2, priority = SoundScheduler.PRIORITY.HIGH },
-    torpedo_launch  = { file = "sounds/torpedo_launch.ogg",    duration = 3,   priority = SoundScheduler.PRIORITY.CRITICAL },
-    torpedo_homing  = { file = "sounds/torpedo_homing.ogg",    duration = 2,   priority = SoundScheduler.PRIORITY.HIGH },
-    buoy_splash     = { file = "sounds/buoy_splash.ogg",       duration = 2,   priority = SoundScheduler.PRIORITY.NORMAL },
-    recover_splash  = { file = "sounds/recover_splash.ogg",    duration = 2,   priority = SoundScheduler.PRIORITY.NORMAL },
-    noisemaker_loop = { file = "sounds/noisemaker_active.ogg",  duration = 3,   priority = SoundScheduler.PRIORITY.LOW },
-    warning_torpedo = { file = "sounds/warning_torpedo.ogg",   duration = 3,   priority = SoundScheduler.PRIORITY.ALERT },
-    warning_sonar   = { file = "sounds/warning_sonar.ogg",     duration = 2,   priority = SoundScheduler.PRIORITY.ALERT },
+    torpedo_launch    = { file = "sounds/torpedo_launch.ogg",    duration = 3, priority = SoundScheduler.PRIORITY.CRITICAL },
+    torpedo_homing    = { file = "sounds/torpedo_homing.ogg",    duration = 2, priority = SoundScheduler.PRIORITY.HIGH },
+    buoy_splash       = { file = "sounds/buoy_splash.ogg",       duration = 2, priority = SoundScheduler.PRIORITY.NORMAL },
+    recover_splash    = { file = "sounds/recover_splash.ogg",    duration = 2, priority = SoundScheduler.PRIORITY.NORMAL },
+    noisemaker_loop   = { file = "sounds/noisemaker_active.ogg", duration = 3, priority = SoundScheduler.PRIORITY.LOW },
+    warning_torpedo   = { file = "sounds/warning_torpedo.ogg",   duration = 3, priority = SoundScheduler.PRIORITY.ALERT },
+    warning_sonar     = { file = "sounds/warning_sonar.ogg",     duration = 2, priority = SoundScheduler.PRIORITY.ALERT },
+    mad_buzz          = { file = "sounds/buzz.ogg",              duration = 3, priority = SoundScheduler.PRIORITY.LOW },
 }
 
 -- =============================================================================
@@ -170,21 +184,49 @@ end
 -- Make scheduler globally accessible for other modules
 ASW_SOUND = soundScheduler
 
+-- Shared depth-charge detonation log — DepthCharge writes here, AI reads it
+ASW_DC_DETONATIONS = {}
+
 -- ===== Create Submarine =====
+-- Resolve spawn zone: if spawnZone is a table, pick one at random from
+-- only the zones that actually exist in the mission. Warns about missing zones.
+local function resolveSpawnZone(cfg)
+    if type(cfg.spawnZone) == "table" and #cfg.spawnZone > 0 then
+        local valid = {}
+        for _, name in ipairs(cfg.spawnZone) do
+            if trigger.misc.getZone(name) then
+                valid[#valid + 1] = name
+            else
+                trigger.action.outText("ASW WARNING: spawn zone '" .. name .. "' not found in mission — skipped.", 15)
+                env.info("ASW WARNING: spawn zone '" .. name .. "' not found in mission — skipped.", false)
+            end
+        end
+        if #valid == 0 then
+            trigger.action.outText("ASW ERROR: No valid spawn zones found! Check spawnZone names in asw_config.lua.", 30)
+            return nil
+        end
+        local chosen = valid[math.random(#valid)]
+        debugMessage("ASW: submarine spawn zone randomly chosen: " .. chosen)
+        return chosen
+    end
+    return cfg.spawnZone
+end
+
+local spawnZone = resolveSpawnZone(SUB_CONFIG)
 local submarine
 if SUB_CONFIG.type == "diesel" then
     submarine = VirtualSubmarine:newDieselFromZone(
-        SUB_CONFIG.name, SUB_CONFIG.spawnZone,
+        SUB_CONFIG.name, spawnZone,
         SUB_CONFIG.startDepth, SUB_CONFIG.startSpeed, SUB_CONFIG.startHeading,
         SUB_COALITION, THERMAL_LAYER_DEPTH, SUB_CONFIG.randomizeSpawn)
 elseif SUB_CONFIG.type == "ssn" then
     submarine = VirtualSubmarine:newSSNFromZone(
-        SUB_CONFIG.name, SUB_CONFIG.spawnZone,
+        SUB_CONFIG.name, spawnZone,
         SUB_CONFIG.startDepth, SUB_CONFIG.startSpeed, SUB_CONFIG.startHeading,
         SUB_COALITION, THERMAL_LAYER_DEPTH, SUB_CONFIG.randomizeSpawn)
 elseif SUB_CONFIG.type == "custom" then
     submarine = VirtualSubmarine:newFromZone(
-        SUB_CONFIG.name, SUB_CONFIG.spawnZone,
+        SUB_CONFIG.name, spawnZone,
         SUB_CONFIG.startDepth, SUB_CONFIG.startSpeed, SUB_CONFIG.startHeading,
         SUB_CONFIG.noiseFactor, SUB_CONFIG.maxSpeed, SUB_CONFIG.maxDepth,
         SUB_COALITION, THERMAL_LAYER_DEPTH, SUB_CONFIG.randomizeSpawn)
@@ -281,6 +323,15 @@ if COMMANDER_MODE == "ai" or COMMANDER_MODE == "both" then
         dippingSonars    = sharedDippingSonars,
     })
 end
+
+-- ===== Ship Commander =====
+ShipCommander:new({
+    groupPrefix       = SHIP_CONFIG.prefix,
+    ownerCoalition    = ASW_COALITION,
+    submarines        = detectableObjects,
+    thermalLayerDepth = THERMAL_LAYER_DEPTH,
+    dcSupply          = SHIP_CONFIG.dcSupply,
+})
 
 -- ===== Submarine Update Loop =====
 local function submarineUpdateLoop()

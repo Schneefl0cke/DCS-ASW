@@ -77,6 +77,11 @@ end
 
 -- Deploy from a trigger zone
 function Sonarbuoy:newFromZone(name, zoneName, ownerCoalition, maxDetectionRange, thermalLayerDepth, batteryLife)
+    if not zoneName then
+        trigger.action.outText("SONARBUOY ERROR: zone name is nil", 10)
+        env.info("SONARBUOY ERROR: newFromZone called with nil zone name", false)
+        return nil
+    end
     local zone = trigger.misc.getZone(zoneName)
     if not zone then
         trigger.action.outText("SONARBUOY ERROR: Trigger zone '" .. zoneName .. "' could not be found!", 10)

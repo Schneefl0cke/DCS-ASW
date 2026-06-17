@@ -1,5 +1,10 @@
 ## 0.2.0
 
+### AI submarine waypoint zone validation
+- `AISubmarineCommander` now validates every zone name in `waypointZones` at construction time via `trigger.misc.getZone()`
+- Invalid zone names are skipped with a coalition warning; if ALL zones are invalid the submarine still spawns but emits a 20-second warning that it will not patrol
+- Prevents the hard DCS script error that occurred when a zone name was misspelled or the zone had been deleted from the mission
+
 ### Ship support (ShipCommander + ShipSonar)
 - New `ShipCommander` class discovers all coalition groups whose name contains the configured prefix (default `asw_ship`) at mission start; groups with more than one unit are skipped with a warning
 - Coalition-wide F10 menus (`ASW Ships → [Ship Name]`) so any BLUE player or Game Master can issue orders to any ship

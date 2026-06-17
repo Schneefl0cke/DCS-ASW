@@ -38,5 +38,5 @@
 
 ## Ships (Separate Project Phase)
 
-- **ASDIC / listening stations on ships** — Ships with specific unit names get passive sonar. Recommend putting them in separate groups for menu management.
 - Ships have fundamentally different weapon systems (ASROCs, deck guns, depth charge racks) and will be implemented as a standalone manager class.
+- Ship Anti-Torpedo
