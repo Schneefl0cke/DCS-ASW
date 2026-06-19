@@ -1,5 +1,15 @@
 ## 0.2.0
 
+### Towed antenna
+- Submarine can deploy a floating wire antenna via F10 menu (`Submarine Command → [Sub] → Towed Antenna`)
+- Takes 60 s to reach the surface and 60 s to retract; speed limit of 4.0 m/s (~8 kt) applies throughout — exceeding it snaps the cable and the antenna is lost
+- Each submarine carries 2 antennas; lost antennas cannot be replaced
+- While deployed, "Request HQ: Ship Positions" contacts HQ and places 100%-confidence position markers for all enemy surface ships on the sub coalition's F10 map; old intel is cleared before each new report
+- Transmitting carries a **40% flat detection risk**: if triggered, the enemy coalition receives a direction-finding fix ("HF INTERCEPT") with the submarine's exact position marked on their F10 map
+- While deployed but not transmitting, nearby ships (5 km) and helicopters (7 km) have a per-second chance to visually spot the antenna buoy at the surface (quadratic falloff, 5%/s max); if spotted, the enemy coalition gets a position marker and the sub is warned
+- Deploying while already moving faster than 4.0 m/s is blocked with a message; retraction during deployment calculates a partial retract time proportional to how far the cable had extended
+- Periscope depth limit corrected to 20 m (was 15 m) to match the "Periscope Depth" preset
+
 ### Periscope
 - Submarine can raise a periscope when at ≤ 15 m depth via F10 menu (`Submarine Command → [Sub] → Periscope`)
 - While raised, all enemy ships and helicopters within **8 km** are detected with 100% certainty and marked on the sub coalition's F10 map with unit name, type, and heading

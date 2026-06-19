@@ -83,10 +83,29 @@ function VirtualSubmarine:new(name, x, z, depth, speed, heading, noiseFactor, ma
         periscopeViewRange = 8000,
         periscopeShipDetectRange = 5000,
         periscopeHeloDetectRange = 7000,
-        periscopeMaxProb = 0.20,
+        periscopeMaxProb = 0.05,
         periscopeContactMarkers = {},
         periscopeSpottedMarker = nil,
-        lastPeriscopeSpottedTime = 0
+        lastPeriscopeSpottedTime = 0,
+        periscopeRingMarkId = nil,
+        periscopeRingLabelId = nil,
+        periscopeViewRingMarkId = nil,
+        periscopeViewRingLabelId = nil,
+        -- towed antenna
+        antennaState = "stowed",       -- "stowed", "deploying", "deployed", "retracting"
+        antennaDeployTime = 60,        -- seconds to reach the surface
+        antennaRetractTime = 60,       -- seconds to pull back in
+        antennaTimer = 0,
+        antennaMaxSpeed = 4.0,         -- m/s (~8 kt) — exceed this and the cable snaps
+        antennaCount = 2,
+        maxAntennas = 2,
+        antennaShipDetectRange = 5000,
+        antennaHeloDetectRange = 7000,
+        antennaPassiveMaxProb = 0.05,
+        antennaTransmitProb = 0.40,
+        antennaContactMarkers = {},
+        antennaExposedMarker = nil,
+        antennaLastDetectTime = 0
     }
     setmetatable(obj, VirtualSubmarine)
     return obj
@@ -278,6 +297,7 @@ function VirtualSubmarine:update()
     end
 
     self:periscopeUpdate()
+    self:antennaUpdate()
 end
 
 function VirtualSubmarine:markOwnPosition()
@@ -374,6 +394,49 @@ function VirtualSubmarine:markOwnPosition()
         string.format("Torp range ~%.1f km | %d/%d",
             self.torpedoRange / 1000, self.torpedoCount, self.maxTorpedoes))
 
+    -- Periscope rings (only while raised)
+    if self.periscopeRingMarkId then
+        trigger.action.removeMark(self.periscopeRingMarkId)
+        self.periscopeRingMarkId = nil
+    end
+    if self.periscopeRingLabelId then
+        trigger.action.removeMark(self.periscopeRingLabelId)
+        self.periscopeRingLabelId = nil
+    end
+    if self.periscopeViewRingMarkId then
+        trigger.action.removeMark(self.periscopeViewRingMarkId)
+        self.periscopeViewRingMarkId = nil
+    end
+    if self.periscopeViewRingLabelId then
+        trigger.action.removeMark(self.periscopeViewRingLabelId)
+        self.periscopeViewRingLabelId = nil
+    end
+    if self.periscopeUp then
+        local orange = {1, 0.5, 0, 1}
+        local pRange = self.periscopeHeloDetectRange
+        self.periscopeRingMarkId = nextSubMarkId()
+        trigger.action.circleToAll(coalitionId, self.periscopeRingMarkId,
+            {x = self.x, y = 0, z = self.z},
+            pRange, orange, {1, 0.5, 0, 0.03}, 1, true)
+        self.periscopeRingLabelId = nextSubMarkId()
+        trigger.action.textToAll(coalitionId, self.periscopeRingLabelId,
+            {x = self.x, y = 0, z = self.z + pRange + 300},
+            orange, {0, 0, 0, 0}, 10, true,
+            string.format("Periscope exposure (%.0f km)", pRange / 1000))
+
+        local cyan = {0, 0.8, 1, 1}
+        local vRange = self.periscopeViewRange
+        self.periscopeViewRingMarkId = nextSubMarkId()
+        trigger.action.circleToAll(coalitionId, self.periscopeViewRingMarkId,
+            {x = self.x, y = 0, z = self.z},
+            vRange, cyan, {0, 0.8, 1, 0.03}, 1, true)
+        self.periscopeViewRingLabelId = nextSubMarkId()
+        trigger.action.textToAll(coalitionId, self.periscopeViewRingLabelId,
+            {x = self.x, y = 0, z = self.z - vRange - 300},
+            cyan, {0, 0, 0, 0}, 10, true,
+            string.format("Periscope view (%.0f km)", vRange / 1000))
+    end
+
     -- Log status text to coalition
     local layerStatus = self.belowThermalLayer and "BELOW layer" or "ABOVE layer"
     local hdgText = string.format("%.0f", self.heading)
@@ -446,6 +509,21 @@ function VirtualSubmarine:destroy()
     if self.periscopeSpottedMarker then
         self.periscopeSpottedMarker:Remove()
         self.periscopeSpottedMarker = nil
+    end
+    for _, id in ipairs({
+        {self.periscopeRingMarkId},    {self.periscopeRingLabelId},
+        {self.periscopeViewRingMarkId},{self.periscopeViewRingLabelId}
+    }) do
+        if id[1] then trigger.action.removeMark(id[1]) end
+    end
+    self.periscopeRingMarkId     = nil
+    self.periscopeRingLabelId    = nil
+    self.periscopeViewRingMarkId  = nil
+    self.periscopeViewRingLabelId = nil
+    self:clearAntennaContactMarkers()
+    if self.antennaExposedMarker then
+        self.antennaExposedMarker:Remove()
+        self.antennaExposedMarker = nil
     end
     log(self.name .. " has been sunk!", self.ownerCoalition)
     debugMessage(self.name .. " has been sunk at X=" .. string.format("%.1f", self.x) .. " Z=" .. string.format("%.1f", self.z) .. " depth=" .. string.format("%.1f", self.depth) .. "m")
@@ -628,6 +706,16 @@ function VirtualSubmarine:lowerPeriscope()
     if not self.periscopeUp then return end
     self.periscopeUp = false
     self:clearPeriscopeMarkers()
+    for _, id in ipairs({
+        {self.periscopeRingMarkId},    {self.periscopeRingLabelId},
+        {self.periscopeViewRingMarkId},{self.periscopeViewRingLabelId}
+    }) do
+        if id[1] then trigger.action.removeMark(id[1]) end
+    end
+    self.periscopeRingMarkId     = nil
+    self.periscopeRingLabelId    = nil
+    self.periscopeViewRingMarkId  = nil
+    self.periscopeViewRingLabelId = nil
     log(self.name .. " periscope lowered.", self.ownerCoalition)
 end
 
@@ -772,6 +860,233 @@ function VirtualSubmarine:onPeriscopeSpotted(spottingUnit, currentTime)
 
     if ASW_SOUND then
         ASW_SOUND:playForCoalition(self.ownerCoalition, "warning_sonar")
+    end
+end
+
+-- ===== TOWED ANTENNA =====
+
+function VirtualSubmarine:deployAntenna()
+    if not self.alive then return end
+    if self.antennaState ~= "stowed" then
+        local msgs = {
+            deploying  = "antenna is already deploying (" .. math.ceil(self.antennaTimer) .. "s remaining).",
+            deployed   = "antenna is already deployed.",
+            retracting = "antenna is still retracting (" .. math.ceil(self.antennaTimer) .. "s remaining)."
+        }
+        log(self.name .. " " .. (msgs[self.antennaState] or "antenna busy."), self.ownerCoalition)
+        return
+    end
+    if self.antennaCount <= 0 then
+        log(self.name .. " no towed antennas remaining.", self.ownerCoalition)
+        return
+    end
+    if self.speed > self.antennaMaxSpeed then
+        log(self.name .. " cannot deploy antenna: speed " .. string.format("%.1f", self.speed) ..
+            " m/s exceeds limit of " .. string.format("%.1f", self.antennaMaxSpeed) .. " m/s (~" ..
+            string.format("%.0f", self.antennaMaxSpeed * 1.944) .. " kt). Slow down first.",
+            self.ownerCoalition)
+        return
+    end
+    self.antennaState = "deploying"
+    self.antennaTimer = self.antennaDeployTime
+    log(self.name .. " deploying towed antenna... (" .. self.antennaDeployTime ..
+        "s). Stay below " .. string.format("%.1f", self.antennaMaxSpeed) ..
+        " m/s or the cable will snap.", self.ownerCoalition)
+end
+
+function VirtualSubmarine:retractAntenna()
+    if not self.alive then return end
+    if self.antennaState == "stowed" then
+        log(self.name .. " antenna is already stowed.", self.ownerCoalition)
+        return
+    end
+    if self.antennaState == "retracting" then
+        log(self.name .. " antenna is already retracting (" ..
+            math.ceil(self.antennaTimer) .. "s remaining).", self.ownerCoalition)
+        return
+    end
+    if self.antennaState == "deploying" then
+        local fraction = 1 - (self.antennaTimer / self.antennaDeployTime)
+        self.antennaTimer = math.max(5, math.floor(fraction * self.antennaRetractTime))
+        self.antennaState = "retracting"
+        log(self.name .. " antenna deployment cancelled — retracting (" ..
+            self.antennaTimer .. "s).", self.ownerCoalition)
+        return
+    end
+    -- deployed → retracting
+    self:clearAntennaContactMarkers()
+    self.antennaState = "retracting"
+    self.antennaTimer = self.antennaRetractTime
+    log(self.name .. " retracting towed antenna... (" .. self.antennaRetractTime .. "s).", self.ownerCoalition)
+end
+
+function VirtualSubmarine:antennaUpdate()
+    if self.antennaState == "stowed" then return end
+
+    -- Cable snaps if speed is exceeded in any non-stowed state
+    if self.speed > self.antennaMaxSpeed then
+        self.antennaCount = self.antennaCount - 1
+        self.antennaState = "stowed"
+        self.antennaTimer = 0
+        self:clearAntennaContactMarkers()
+        log(self.name .. " ANTENNA CABLE SNAPPED: speed " .. string.format("%.1f", self.speed) ..
+            " m/s exceeded " .. string.format("%.1f", self.antennaMaxSpeed) ..
+            " m/s limit! Antenna lost. Remaining: " ..
+            self.antennaCount .. "/" .. self.maxAntennas, self.ownerCoalition, 15)
+        return
+    end
+
+    if self.antennaState == "deploying" then
+        self.antennaTimer = self.antennaTimer - 1
+        if self.antennaTimer <= 0 then
+            self.antennaState = "deployed"
+            log(self.name .. " towed antenna at surface — HQ comms ready. " ..
+                "Speed limit " .. string.format("%.1f", self.antennaMaxSpeed) ..
+                " m/s (~" .. string.format("%.0f", self.antennaMaxSpeed * 1.944) ..
+                " kt). Requesting ship positions now carries " ..
+                string.format("%.0f", self.antennaTransmitProb * 100) .. "% detection risk.",
+                self.ownerCoalition, 20)
+        end
+        return
+    end
+
+    if self.antennaState == "retracting" then
+        self.antennaTimer = self.antennaTimer - 1
+        if self.antennaTimer <= 0 then
+            self.antennaState = "stowed"
+            log(self.name .. " towed antenna retracted and stowed.", self.ownerCoalition)
+        end
+        return
+    end
+
+    -- Deployed: passive detection risk each second
+    if self.antennaState == "deployed" then
+        self:antennaPassiveDetectionRisk(timer.getTime())
+    end
+end
+
+function VirtualSubmarine:requestHQPositions()
+    if not self.alive then return end
+    if self.antennaState ~= "deployed" then
+        local msgs = {
+            stowed     = "cannot contact HQ: antenna is stowed.",
+            deploying  = "cannot contact HQ: antenna still deploying (" .. math.ceil(self.antennaTimer) .. "s).",
+            retracting = "cannot contact HQ: antenna is retracting."
+        }
+        log(self.name .. " " .. (msgs[self.antennaState] or "antenna not ready."), self.ownerCoalition)
+        return
+    end
+
+    local enemyCoalition = self:getEnemyCoalition()
+    local contacts = {}
+    local shipGroups = coalition.getGroups(enemyCoalition, Group.Category.SHIP)
+    if shipGroups then
+        for _, group in ipairs(shipGroups) do
+            if group and group:isExist() then
+                local units = group:getUnits()
+                if units then
+                    for _, unit in ipairs(units) do
+                        if unit and unit:isExist() then
+                            contacts[#contacts + 1] = unit
+                        end
+                    end
+                end
+            end
+        end
+    end
+
+    self:clearAntennaContactMarkers()
+
+    if #contacts == 0 then
+        log(self.name .. " HQ: No enemy surface contacts in theatre.", self.ownerCoalition, 15)
+    else
+        for _, unit in ipairs(contacts) do
+            local pos = unit:getPoint()
+            local vel = unit:getVelocity()
+            local hdg = math.deg(math.atan2(vel.z, vel.x))
+            if hdg < 0 then hdg = hdg + 360 end
+            local coord = COORDINATE:New(pos.x, 0, pos.z)
+            local text = string.format("%s | HQ INTEL: %s [%s] | Hdg: %.0f\194\176",
+                self.name, unit:getName(), unit:getTypeName(), hdg)
+            self.antennaContactMarkers[unit:getName()] =
+                MARKER:New(coord, text):ReadOnly():ToCoalition(self.ownerCoalition)
+        end
+        log(string.format("%s HQ: %d surface contact(s) confirmed and marked on F10 map.",
+            self.name, #contacts), self.ownerCoalition, 20)
+    end
+
+    -- 40% chance enemy direction-finds the transmission
+    if math.random() < self.antennaTransmitProb then
+        local coord = COORDINATE:New(self.x, 0, self.z)
+        local text = string.format("HF INTERCEPT: Submarine transmission DF'd! [%s]", self.name)
+        if self.antennaExposedMarker then self.antennaExposedMarker:Remove() end
+        self.antennaExposedMarker = MARKER:New(coord, text):ReadOnly():ToCoalition(enemyCoalition)
+        trigger.action.outTextForCoalition(enemyCoalition,
+            "RADIO INTERCEPT! Submarine transmission direction-found. Position marked on F10 map.", 20, false)
+        log(self.name .. " WARNING: Transmission intercepted! Enemy has your position!", self.ownerCoalition, 20)
+        if ASW_SOUND then ASW_SOUND:playForCoalition(self.ownerCoalition, "warning_sonar") end
+    end
+end
+
+function VirtualSubmarine:antennaPassiveDetectionRisk(currentTime)
+    local enemyCoalition = self:getEnemyCoalition()
+
+    local function checkGroups(category, detectRange)
+        local groups = coalition.getGroups(enemyCoalition, category)
+        if not groups then return false end
+        for _, group in ipairs(groups) do
+            if group and group:isExist() then
+                local units = group:getUnits()
+                if units then
+                    for _, unit in ipairs(units) do
+                        if unit and unit:isExist() then
+                            local pos = unit:getPoint()
+                            local dx = pos.x - self.x
+                            local dz = pos.z - self.z
+                            local dist = math.sqrt(dx * dx + dz * dz)
+                            if dist <= detectRange then
+                                local t = 1 - dist / detectRange
+                                if math.random() < self.antennaPassiveMaxProb * t * t then
+                                    if currentTime - self.antennaLastDetectTime >= 30 then
+                                        self.antennaLastDetectTime = currentTime
+                                        local coord = COORDINATE:New(self.x, 0, self.z)
+                                        local text = string.format(
+                                            "ANTENNA BUOY SPOTTED by %s! Submarine at this position. [%s]",
+                                            unit:getName(), self.name)
+                                        if self.antennaExposedMarker then
+                                            self.antennaExposedMarker:Remove()
+                                        end
+                                        self.antennaExposedMarker =
+                                            MARKER:New(coord, text):ReadOnly():ToCoalition(enemyCoalition)
+                                        trigger.action.outTextForCoalition(enemyCoalition,
+                                            "ANTENNA BUOY SPOTTED! " .. unit:getName() ..
+                                            " has visual on a submarine towed buoy! Position marked.", 20, false)
+                                        log(self.name .. " WARNING: Towed antenna spotted by " ..
+                                            unit:getName() .. "! Retract immediately!", self.ownerCoalition, 20)
+                                        if ASW_SOUND then
+                                            ASW_SOUND:playForCoalition(self.ownerCoalition, "warning_sonar")
+                                        end
+                                    end
+                                    return true
+                                end
+                            end
+                        end
+                    end
+                end
+            end
+        end
+        return false
+    end
+
+    if not checkGroups(Group.Category.SHIP, self.antennaShipDetectRange) then
+        checkGroups(Group.Category.HELICOPTER, self.antennaHeloDetectRange)
+    end
+end
+
+function VirtualSubmarine:clearAntennaContactMarkers()
+    for unitName, marker in pairs(self.antennaContactMarkers) do
+        marker:Remove()
+        self.antennaContactMarkers[unitName] = nil
     end
 end
 
@@ -5363,6 +5678,13 @@ function HumanSubmarineCommander:buildMenus()
         MENU_COALITION_COMMAND:New(side, "Raise Periscope", periscopeMenu, self.raisePeriscope, self, sub)
         MENU_COALITION_COMMAND:New(side, "Lower Periscope", periscopeMenu, self.lowerPeriscope, self, sub)
         MENU_COALITION_COMMAND:New(side, "Periscope Status", periscopeMenu, self.periscopeStatus, self, sub)
+
+        -- Towed Antenna submenu
+        local antennaMenu = MENU_COALITION:New(side, "Towed Antenna", subMenu)
+        MENU_COALITION_COMMAND:New(side, "Deploy Antenna", antennaMenu, self.deployAntenna, self, sub)
+        MENU_COALITION_COMMAND:New(side, "Retract Antenna", antennaMenu, self.retractAntenna, self, sub)
+        MENU_COALITION_COMMAND:New(side, "Request HQ: Ship Positions", antennaMenu, self.requestHQPositions, self, sub)
+        MENU_COALITION_COMMAND:New(side, "Antenna Status", antennaMenu, self.antennaStatus, self, sub)
     end
 end
 
@@ -5534,6 +5856,46 @@ function HumanSubmarineCommander:periscopeStatus(sub)
         sub.periscopeViewRange / 1000,
         sub.periscopeShipDetectRange / 1000,
         sub.periscopeHeloDetectRange / 1000)
+    self:message(msg, 15)
+end
+
+-- ===== TOWED ANTENNA =====
+
+function HumanSubmarineCommander:deployAntenna(sub)
+    if not sub:isAlive() then return end
+    sub:deployAntenna()
+end
+
+function HumanSubmarineCommander:retractAntenna(sub)
+    if not sub:isAlive() then return end
+    sub:retractAntenna()
+end
+
+function HumanSubmarineCommander:requestHQPositions(sub)
+    if not sub:isAlive() then return end
+    sub:requestHQPositions()
+end
+
+function HumanSubmarineCommander:antennaStatus(sub)
+    if not sub:isAlive() then return end
+    local stateDesc = {
+        stowed     = "Stowed (safe)",
+        deploying  = string.format("Deploying (%ds remaining)", math.ceil(sub.antennaTimer)),
+        deployed   = "Deployed \226\128\148 HQ comms available",
+        retracting = string.format("Retracting (%ds remaining)", math.ceil(sub.antennaTimer)),
+    }
+    local speedOk = sub.speed <= sub.antennaMaxSpeed
+    local intelCount = 0
+    for _ in pairs(sub.antennaContactMarkers) do intelCount = intelCount + 1 end
+    local msg = string.format(
+        "%s Towed Antenna Status:\nState: %s\nAntennas: %d/%d\nSpeed: %.1f m/s %s (limit %.1f m/s / %.0f kt)\nHQ intel markers: %d\nTransmit detection risk: %.0f%%",
+        sub.name,
+        stateDesc[sub.antennaState] or sub.antennaState,
+        sub.antennaCount, sub.maxAntennas,
+        sub.speed, speedOk and "(OK)" or "(TOO FAST \226\128\148 cable at risk!)",
+        sub.antennaMaxSpeed, sub.antennaMaxSpeed * 1.944,
+        intelCount,
+        sub.antennaTransmitProb * 100)
     self:message(msg, 15)
 end
 

@@ -132,6 +132,13 @@ function HumanSubmarineCommander:buildMenus()
         MENU_COALITION_COMMAND:New(side, "Raise Periscope", periscopeMenu, self.raisePeriscope, self, sub)
         MENU_COALITION_COMMAND:New(side, "Lower Periscope", periscopeMenu, self.lowerPeriscope, self, sub)
         MENU_COALITION_COMMAND:New(side, "Periscope Status", periscopeMenu, self.periscopeStatus, self, sub)
+
+        -- Towed Antenna submenu
+        local antennaMenu = MENU_COALITION:New(side, "Towed Antenna", subMenu)
+        MENU_COALITION_COMMAND:New(side, "Deploy Antenna", antennaMenu, self.deployAntenna, self, sub)
+        MENU_COALITION_COMMAND:New(side, "Retract Antenna", antennaMenu, self.retractAntenna, self, sub)
+        MENU_COALITION_COMMAND:New(side, "Request HQ: Ship Positions", antennaMenu, self.requestHQPositions, self, sub)
+        MENU_COALITION_COMMAND:New(side, "Antenna Status", antennaMenu, self.antennaStatus, self, sub)
     end
 end
 
@@ -303,5 +310,45 @@ function HumanSubmarineCommander:periscopeStatus(sub)
         sub.periscopeViewRange / 1000,
         sub.periscopeShipDetectRange / 1000,
         sub.periscopeHeloDetectRange / 1000)
+    self:message(msg, 15)
+end
+
+-- ===== TOWED ANTENNA =====
+
+function HumanSubmarineCommander:deployAntenna(sub)
+    if not sub:isAlive() then return end
+    sub:deployAntenna()
+end
+
+function HumanSubmarineCommander:retractAntenna(sub)
+    if not sub:isAlive() then return end
+    sub:retractAntenna()
+end
+
+function HumanSubmarineCommander:requestHQPositions(sub)
+    if not sub:isAlive() then return end
+    sub:requestHQPositions()
+end
+
+function HumanSubmarineCommander:antennaStatus(sub)
+    if not sub:isAlive() then return end
+    local stateDesc = {
+        stowed     = "Stowed (safe)",
+        deploying  = string.format("Deploying (%ds remaining)", math.ceil(sub.antennaTimer)),
+        deployed   = "Deployed \226\128\148 HQ comms available",
+        retracting = string.format("Retracting (%ds remaining)", math.ceil(sub.antennaTimer)),
+    }
+    local speedOk = sub.speed <= sub.antennaMaxSpeed
+    local intelCount = 0
+    for _ in pairs(sub.antennaContactMarkers) do intelCount = intelCount + 1 end
+    local msg = string.format(
+        "%s Towed Antenna Status:\nState: %s\nAntennas: %d/%d\nSpeed: %.1f m/s %s (limit %.1f m/s / %.0f kt)\nHQ intel markers: %d\nTransmit detection risk: %.0f%%",
+        sub.name,
+        stateDesc[sub.antennaState] or sub.antennaState,
+        sub.antennaCount, sub.maxAntennas,
+        sub.speed, speedOk and "(OK)" or "(TOO FAST \226\128\148 cable at risk!)",
+        sub.antennaMaxSpeed, sub.antennaMaxSpeed * 1.944,
+        intelCount,
+        sub.antennaTransmitProb * 100)
     self:message(msg, 15)
 end
