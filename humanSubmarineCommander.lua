@@ -292,13 +292,13 @@ end
 function HumanSubmarineCommander:periscopeStatus(sub)
     if not sub:isAlive() then return end
     local state = sub.periscopeUp and "UP (EXPOSED)" or "DOWN (safe)"
-    local depthOk = sub.depth <= 15
+    local depthOk = sub.depth <= 20
     local contactCount = 0
     for _ in pairs(sub.periscopeContactMarkers) do contactCount = contactCount + 1 end
     local msg = string.format(
         "%s Periscope Status:\nState: %s\nDepth: %.0fm %s\nVisual contacts: %d\nView range: %.0f km | Detection risk: %.0f km (ships), %.0f km (helis)",
         sub.name, state, sub.depth,
-        depthOk and "(depth OK)" or "(TOO DEEP \226\128\148 need \226\137\164 15m)",
+        depthOk and "(depth OK)" or "(TOO DEEP \226\128\148 need \226\137\164 20m)",
         contactCount,
         sub.periscopeViewRange / 1000,
         sub.periscopeShipDetectRange / 1000,

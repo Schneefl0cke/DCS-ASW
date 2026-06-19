@@ -598,9 +598,9 @@ end
 
 function VirtualSubmarine:raisePeriscope()
     if not self.alive then return end
-    if self.depth > 15 then
+    if self.depth > 20 then
         log(self.name .. " cannot raise periscope: depth " .. string.format("%.0f", self.depth) ..
-            "m (must be \226\137\164 15m \226\128\148 use 'Periscope Depth' first)", self.ownerCoalition)
+            "m (must be \226\137\164 20m \226\128\148 use 'Periscope Depth' first)", self.ownerCoalition)
         return
     end
     if self.periscopeUp then
@@ -632,9 +632,9 @@ function VirtualSubmarine:periscopeUpdate()
     if not self.periscopeUp then return end
 
     -- Auto-lower if sub descended below periscope depth
-    if self.depth > 15 then
+    if self.depth > 20 then
         log(self.name .. " periscope auto-lowered: depth " ..
-            string.format("%.0f", self.depth) .. "m exceeds 15m limit.", self.ownerCoalition)
+            string.format("%.0f", self.depth) .. "m exceeds 20m limit.", self.ownerCoalition)
         self:lowerPeriscope()
         return
     end
