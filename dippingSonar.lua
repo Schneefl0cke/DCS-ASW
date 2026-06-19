@@ -1,6 +1,12 @@
 DippingSonar = {}
 DippingSonar.__index = DippingSonar
 
+if not _dsSonarRingIdCounter then _dsSonarRingIdCounter = 550000 end
+local function nextDSRingId()
+    _dsSonarRingIdCounter = _dsSonarRingIdCounter + 1
+    return _dsSonarRingIdCounter
+end
+
 local function log(message, logCoalition, duration)
     duration = duration or 10
     trigger.action.outTextForCoalition(logCoalition, message, duration, false)
@@ -46,7 +52,8 @@ function DippingSonar:new(groupName, ownerCoalition, thermalLayerDepth, submarin
         state = "stowed",            -- stowed, lowering, active, raising, broken
         operational = true,          -- false if cable broke
         contactMarkers = {},
-        updateScheduleId = nil
+        updateScheduleId = nil,
+        rangeRingMarkId  = nil,
     }
     setmetatable(obj, DippingSonar)
     return obj
@@ -218,6 +225,10 @@ function DippingSonar:startUpdateLoop()
             if self.currentCableLength <= 0 then
                 self.currentCableLength = 0
                 self.state = "stowed"
+                if self.rangeRingMarkId then
+                    trigger.action.removeMark(self.rangeRingMarkId)
+                    self.rangeRingMarkId = nil
+                end
                 self:messageToGroup("Dipping sonar stowed.", 5)
                 return -- Stop the loop
             else
@@ -262,11 +273,26 @@ function DippingSonar:startUpdateLoop()
     update()
 end
 
+-- Redraw the detection-range ring at the helicopter's current position.
+function DippingSonar:updateRangeRing(unit)
+    if self.rangeRingMarkId then
+        trigger.action.removeMark(self.rangeRingMarkId)
+        self.rangeRingMarkId = nil
+    end
+    if self.state ~= "active" then return end
+    local pos = unit:getPoint()
+    local center = {x = pos.x, y = 0, z = pos.z}
+    self.rangeRingMarkId = nextDSRingId()
+    trigger.action.circleToAll(self.ownerCoalition, self.rangeRingMarkId, center, self.maxDetectionRange,
+        {0, 0.8, 0.8, 0.5}, {0, 0.8, 0.8, 0.03}, 1, true)
+end
+
 -- Active sonar ping: detect submarines
 function DippingSonar:ping(unit)
     local pos = unit:getPoint()
     local sonarX = pos.x
     local sonarZ = pos.z
+    self:updateRangeRing(unit)
 
     -- Sonar ping sound (hunter group + warning to enemy coalition)
     if ASW_SOUND then
@@ -387,6 +413,10 @@ function DippingSonar:breakCable(reason)
     self.state = "broken"
     self.operational = false
     self.currentCableLength = 0
+    if self.rangeRingMarkId then
+        trigger.action.removeMark(self.rangeRingMarkId)
+        self.rangeRingMarkId = nil
+    end
     self:stopUpdateLoop()
     self:clearContactMarkers()
     self:messageToGroup("DIPPING SONAR LOST! " .. reason, 10)

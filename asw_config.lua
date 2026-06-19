@@ -123,7 +123,19 @@ local PLANE_CONFIG = {
 }
 
 -- =============================================================================
--- 6. SONARBUOY SUPPLY
+-- 6. SHIP CONFIGURATION
+-- =============================================================================
+-- Surface ships with depth charges and sonar.
+-- Group names in the Mission Editor must contain the prefix defined below.
+-- Each ship group must contain exactly one unit.
+
+local SHIP_CONFIG = {
+    prefix   = "asw_ship",  -- Group name prefix for surface ships
+    dcSupply = 50,           -- Depth charges per ship (no rearming)
+}
+
+-- =============================================================================
+-- 7. SONARBUOY SUPPLY
 -- =============================================================================
 -- lifetime:   battery life per buoy in seconds. nil = unlimited (no expiry).
 -- globalPool: extra buoys available at rearm, shared across all hunters.
@@ -310,6 +322,15 @@ if COMMANDER_MODE == "ai" or COMMANDER_MODE == "both" then
         dippingSonars    = sharedDippingSonars,
     })
 end
+
+-- ===== Ship Commander =====
+ShipCommander:new({
+    groupPrefix       = SHIP_CONFIG.prefix,
+    ownerCoalition    = ASW_COALITION,
+    submarines        = detectableObjects,
+    thermalLayerDepth = THERMAL_LAYER_DEPTH,
+    dcSupply          = SHIP_CONFIG.dcSupply,
+})
 
 -- ===== Submarine Update Loop =====
 local function submarineUpdateLoop()
