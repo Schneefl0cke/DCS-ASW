@@ -126,6 +126,12 @@ function HumanSubmarineCommander:buildMenus()
             MENU_COALITION_COMMAND:New(side, label, delayMenu, self.deployNoiseMaker, self, sub, delay)
         end
         MENU_COALITION_COMMAND:New(side, "Noise Maker Status", decoyMenu, self.noiseMakerStatus, self, sub)
+
+        -- Periscope submenu
+        local periscopeMenu = MENU_COALITION:New(side, "Periscope", subMenu)
+        MENU_COALITION_COMMAND:New(side, "Raise Periscope", periscopeMenu, self.raisePeriscope, self, sub)
+        MENU_COALITION_COMMAND:New(side, "Lower Periscope", periscopeMenu, self.lowerPeriscope, self, sub)
+        MENU_COALITION_COMMAND:New(side, "Periscope Status", periscopeMenu, self.periscopeStatus, self, sub)
     end
 end
 
@@ -269,4 +275,33 @@ function HumanSubmarineCommander:noiseMakerStatus(sub)
     local msg = string.format("%s Noise Maker Status:\nRemaining: %d/%d\nStandby: %d | Active: %d",
         sub.name, sub.noiseMakerCount, sub.maxNoiseMakers, standbyCount, activeCount)
     self:message(msg, 10)
+end
+
+-- ===== PERISCOPE =====
+
+function HumanSubmarineCommander:raisePeriscope(sub)
+    if not sub:isAlive() then return end
+    sub:raisePeriscope()
+end
+
+function HumanSubmarineCommander:lowerPeriscope(sub)
+    if not sub:isAlive() then return end
+    sub:lowerPeriscope()
+end
+
+function HumanSubmarineCommander:periscopeStatus(sub)
+    if not sub:isAlive() then return end
+    local state = sub.periscopeUp and "UP (EXPOSED)" or "DOWN (safe)"
+    local depthOk = sub.depth <= 15
+    local contactCount = 0
+    for _ in pairs(sub.periscopeContactMarkers) do contactCount = contactCount + 1 end
+    local msg = string.format(
+        "%s Periscope Status:\nState: %s\nDepth: %.0fm %s\nVisual contacts: %d\nView range: %.0f km | Detection risk: %.0f km (ships), %.0f km (helis)",
+        sub.name, state, sub.depth,
+        depthOk and "(depth OK)" or "(TOO DEEP \226\128\148 need \226\137\164 15m)",
+        contactCount,
+        sub.periscopeViewRange / 1000,
+        sub.periscopeShipDetectRange / 1000,
+        sub.periscopeHeloDetectRange / 1000)
+    self:message(msg, 15)
 end

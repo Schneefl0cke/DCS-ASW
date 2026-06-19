@@ -1,5 +1,23 @@
 ## 0.2.0
 
+### Periscope
+- Submarine can raise a periscope when at ≤ 15 m depth via F10 menu (`Submarine Command → [Sub] → Periscope`)
+- While raised, all enemy ships and helicopters within **8 km** are detected with 100% certainty and marked on the sub coalition's F10 map with unit name, type, and heading
+- Each nearby enemy unit rolls a per-second chance to spot the periscope — probability follows a quadratic falloff: 20 %/s at point-blank, 0 % at maximum detection range (5 km for ships, 7 km for helicopters)
+- When spotted: the sub crew receives an immediate warning ("Dive immediately!") with a `warning_sonar` sound; the enemy coalition gets a confirmed position marker and a text alert
+- Spot alerts have a 30-second cooldown to prevent message spam; marker is updated on the next spot event
+- Periscope auto-lowers if the sub descends below 15 m; all contact markers are cleared on lower
+
+### Ship menu refinements
+- F10 menus and log messages now show the **unit name** instead of the group name
+- **Heading** split into two menus: "Change Heading" (10 relative deltas ±5° to ±90°) and "Set Heading" (8 compass points), matching the submarine pattern
+- **Speed** split into two menus: "Change Speed" (±1/±2/±5/±10/±20 kt) and "Set Speed" (Stop / Slow 5 kt / Cruise 10 kt / Fast 15 kt / Full 20 kt / Full 25 kt / Flank 30 kt)
+- Depth charge pattern is now configurable via menu: **Set Pattern Size** (5 or 10 charges) and **Set Pattern Interval** (10 / 20 / 30 s)
+- Ships carry a limited depth-charge supply (default 50, configurable via `SHIP_CONFIG.dcSupply`); no rearming possible; remaining count shown in status and log messages
+- Active sonar range reduced from 20 km to 10 km; at 20 km the distance factor reached zero, making the outer ring meaningless
+- Range ring text label added at the north edge of each ring: "Sonar passive range (12 km)" or "Sonar active range (10 km)"
+
+
 ### AI submarine waypoint zone validation
 - `AISubmarineCommander` now validates every zone name in `waypointZones` at construction time via `trigger.misc.getZone()`
 - Invalid zone names are skipped with a coalition warning; if ALL zones are invalid the submarine still spawns but emits a 20-second warning that it will not patrol

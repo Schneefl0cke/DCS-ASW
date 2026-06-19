@@ -77,7 +77,16 @@ function VirtualSubmarine:new(name, x, z, depth, speed, heading, noiseFactor, ma
         -- torpedo range ring (20.58 m/s × 300s battery = 6174m, matches SubmarineTorpedo)
         torpedoRange = 6174,
         torpedoRangeMarkId = nil,
-        torpedoRangeLabelId = nil
+        torpedoRangeLabelId = nil,
+        -- periscope
+        periscopeUp = false,
+        periscopeViewRange = 8000,
+        periscopeShipDetectRange = 5000,
+        periscopeHeloDetectRange = 7000,
+        periscopeMaxProb = 0.20,
+        periscopeContactMarkers = {},
+        periscopeSpottedMarker = nil,
+        lastPeriscopeSpottedTime = 0
     }
     setmetatable(obj, VirtualSubmarine)
     return obj
@@ -267,6 +276,8 @@ function VirtualSubmarine:update()
         self.lastSonarScanTime = currentTime
         self:passiveSonarScan()
     end
+
+    self:periscopeUpdate()
 end
 
 function VirtualSubmarine:markOwnPosition()
@@ -431,6 +442,11 @@ function VirtualSubmarine:destroy()
         self.torpedoRangeLabelId = nil
     end
     self:clearContactMarkers()
+    self:clearPeriscopeMarkers()
+    if self.periscopeSpottedMarker then
+        self.periscopeSpottedMarker:Remove()
+        self.periscopeSpottedMarker = nil
+    end
     log(self.name .. " has been sunk!", self.ownerCoalition)
     debugMessage(self.name .. " has been sunk at X=" .. string.format("%.1f", self.x) .. " Z=" .. string.format("%.1f", self.z) .. " depth=" .. string.format("%.1f", self.depth) .. "m")
     self:markSunkPosition()
@@ -585,6 +601,177 @@ function VirtualSubmarine:clearContactMarkers()
     for unitName, marker in pairs(self.contactMarkers) do
         marker:Remove()
         self.contactMarkers[unitName] = nil
+    end
+end
+
+-- ===== PERISCOPE =====
+
+function VirtualSubmarine:raisePeriscope()
+    if not self.alive then return end
+    if self.depth > 15 then
+        log(self.name .. " cannot raise periscope: depth " .. string.format("%.0f", self.depth) ..
+            "m (must be \226\137\164 15m \226\128\148 use 'Periscope Depth' first)", self.ownerCoalition)
+        return
+    end
+    if self.periscopeUp then
+        log(self.name .. " periscope is already raised.", self.ownerCoalition)
+        return
+    end
+    self.periscopeUp = true
+    log(self.name .. " periscope raised. View range: " .. self.periscopeViewRange / 1000 ..
+        " km | Detection risk: " .. self.periscopeShipDetectRange / 1000 ..
+        " km (ships), " .. self.periscopeHeloDetectRange / 1000 .. " km (helicopters)",
+        self.ownerCoalition, 15)
+end
+
+function VirtualSubmarine:lowerPeriscope()
+    if not self.periscopeUp then return end
+    self.periscopeUp = false
+    self:clearPeriscopeMarkers()
+    log(self.name .. " periscope lowered.", self.ownerCoalition)
+end
+
+function VirtualSubmarine:clearPeriscopeMarkers()
+    for unitName, marker in pairs(self.periscopeContactMarkers) do
+        marker:Remove()
+        self.periscopeContactMarkers[unitName] = nil
+    end
+end
+
+function VirtualSubmarine:periscopeUpdate()
+    if not self.periscopeUp then return end
+
+    -- Auto-lower if sub descended below periscope depth
+    if self.depth > 15 then
+        log(self.name .. " periscope auto-lowered: depth " ..
+            string.format("%.0f", self.depth) .. "m exceeds 15m limit.", self.ownerCoalition)
+        self:lowerPeriscope()
+        return
+    end
+
+    local enemyCoalition = self:getEnemyCoalition()
+    local currentTime = timer.getTime()
+    local detected = {}
+
+    -- Scan enemy surface ships
+    local shipGroups = coalition.getGroups(enemyCoalition, Group.Category.SHIP)
+    if shipGroups then
+        for _, group in ipairs(shipGroups) do
+            if group and group:isExist() then
+                local units = group:getUnits()
+                if units then
+                    for _, unit in ipairs(units) do
+                        if unit and unit:isExist() then
+                            local pos = unit:getPoint()
+                            local dx = pos.x - self.x
+                            local dz = pos.z - self.z
+                            local dist = math.sqrt(dx * dx + dz * dz)
+                            if dist <= self.periscopeViewRange then
+                                detected[unit:getName()] = {
+                                    unit = unit, dist = dist,
+                                    detRange = self.periscopeShipDetectRange
+                                }
+                            end
+                        end
+                    end
+                end
+            end
+        end
+    end
+
+    -- Scan enemy helicopters
+    local heloGroups = coalition.getGroups(enemyCoalition, Group.Category.HELICOPTER)
+    if heloGroups then
+        for _, group in ipairs(heloGroups) do
+            if group and group:isExist() then
+                local units = group:getUnits()
+                if units then
+                    for _, unit in ipairs(units) do
+                        if unit and unit:isExist() then
+                            local pos = unit:getPoint()
+                            local dx = pos.x - self.x
+                            local dz = pos.z - self.z
+                            local dist = math.sqrt(dx * dx + dz * dz)
+                            if dist <= self.periscopeViewRange then
+                                detected[unit:getName()] = {
+                                    unit = unit, dist = dist,
+                                    detRange = self.periscopeHeloDetectRange
+                                }
+                            end
+                        end
+                    end
+                end
+            end
+        end
+    end
+
+    -- Guaranteed contacts for sub coalition
+    for _, info in pairs(detected) do
+        self:updatePeriscopeContactMarker(info.unit)
+    end
+    -- Remove markers for units that left view range
+    for unitName, marker in pairs(self.periscopeContactMarkers) do
+        if not detected[unitName] then
+            marker:Remove()
+            self.periscopeContactMarkers[unitName] = nil
+        end
+    end
+
+    -- Per-unit detection risk (quadratic falloff, one spot event per tick)
+    for _, info in pairs(detected) do
+        if info.dist <= info.detRange then
+            local t = 1 - info.dist / info.detRange
+            local p = self.periscopeMaxProb * t * t
+            if math.random() < p then
+                self:onPeriscopeSpotted(info.unit, currentTime)
+                break
+            end
+        end
+    end
+end
+
+function VirtualSubmarine:updatePeriscopeContactMarker(unit)
+    local pos = unit:getPoint()
+    local vel = unit:getVelocity()
+    local hdg = math.deg(math.atan2(vel.z, vel.x))
+    if hdg < 0 then hdg = hdg + 360 end
+    local coord = COORDINATE:New(pos.x, 0, pos.z)
+    local text = string.format("%s | PERISCOPE: %s [%s] | Hdg: %.0f\194\176",
+        self.name, unit:getName(), unit:getTypeName(), hdg)
+    local existing = self.periscopeContactMarkers[unit:getName()]
+    if existing then
+        existing:UpdateCoordinate(coord)
+        existing:UpdateText(text)
+    else
+        self.periscopeContactMarkers[unit:getName()] = MARKER:New(coord, text):ReadOnly():ToCoalition(self.ownerCoalition)
+    end
+end
+
+function VirtualSubmarine:onPeriscopeSpotted(spottingUnit, currentTime)
+    if currentTime - self.lastPeriscopeSpottedTime < 30 then return end
+    self.lastPeriscopeSpottedTime = currentTime
+
+    local enemyCoalition = self:getEnemyCoalition()
+
+    -- Warn the sub crew
+    log(self.name .. " WARNING: Periscope spotted by " .. spottingUnit:getName() ..
+        "! Enemy has your position. Dive immediately!", self.ownerCoalition, 20)
+
+    -- Give the enemy a confirmed position fix
+    if self.periscopeSpottedMarker then
+        self.periscopeSpottedMarker:Remove()
+    end
+    local coord = COORDINATE:New(self.x, 0, self.z)
+    local text = string.format("PERISCOPE SIGHTED by %s! Submarine confirmed here. [%s]",
+        spottingUnit:getName(), self.name)
+    self.periscopeSpottedMarker = MARKER:New(coord, text):ReadOnly():ToCoalition(enemyCoalition)
+
+    trigger.action.outTextForCoalition(enemyCoalition,
+        "PERISCOPE SIGHTED! " .. spottingUnit:getName() ..
+        " has visual on a periscope! Position marked on F10 map.", 20, false)
+
+    if ASW_SOUND then
+        ASW_SOUND:playForCoalition(self.ownerCoalition, "warning_sonar")
     end
 end
 
@@ -5170,6 +5357,12 @@ function HumanSubmarineCommander:buildMenus()
             MENU_COALITION_COMMAND:New(side, label, delayMenu, self.deployNoiseMaker, self, sub, delay)
         end
         MENU_COALITION_COMMAND:New(side, "Noise Maker Status", decoyMenu, self.noiseMakerStatus, self, sub)
+
+        -- Periscope submenu
+        local periscopeMenu = MENU_COALITION:New(side, "Periscope", subMenu)
+        MENU_COALITION_COMMAND:New(side, "Raise Periscope", periscopeMenu, self.raisePeriscope, self, sub)
+        MENU_COALITION_COMMAND:New(side, "Lower Periscope", periscopeMenu, self.lowerPeriscope, self, sub)
+        MENU_COALITION_COMMAND:New(side, "Periscope Status", periscopeMenu, self.periscopeStatus, self, sub)
     end
 end
 
@@ -5313,6 +5506,35 @@ function HumanSubmarineCommander:noiseMakerStatus(sub)
     local msg = string.format("%s Noise Maker Status:\nRemaining: %d/%d\nStandby: %d | Active: %d",
         sub.name, sub.noiseMakerCount, sub.maxNoiseMakers, standbyCount, activeCount)
     self:message(msg, 10)
+end
+
+-- ===== PERISCOPE =====
+
+function HumanSubmarineCommander:raisePeriscope(sub)
+    if not sub:isAlive() then return end
+    sub:raisePeriscope()
+end
+
+function HumanSubmarineCommander:lowerPeriscope(sub)
+    if not sub:isAlive() then return end
+    sub:lowerPeriscope()
+end
+
+function HumanSubmarineCommander:periscopeStatus(sub)
+    if not sub:isAlive() then return end
+    local state = sub.periscopeUp and "UP (EXPOSED)" or "DOWN (safe)"
+    local depthOk = sub.depth <= 15
+    local contactCount = 0
+    for _ in pairs(sub.periscopeContactMarkers) do contactCount = contactCount + 1 end
+    local msg = string.format(
+        "%s Periscope Status:\nState: %s\nDepth: %.0fm %s\nVisual contacts: %d\nView range: %.0f km | Detection risk: %.0f km (ships), %.0f km (helis)",
+        sub.name, state, sub.depth,
+        depthOk and "(depth OK)" or "(TOO DEEP \226\128\148 need \226\137\164 15m)",
+        contactCount,
+        sub.periscopeViewRange / 1000,
+        sub.periscopeShipDetectRange / 1000,
+        sub.periscopeHeloDetectRange / 1000)
+    self:message(msg, 15)
 end
 
 -- ===========================================================================
